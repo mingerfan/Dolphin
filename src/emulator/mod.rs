@@ -8,7 +8,7 @@ mod memory;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
-use anyhow::Result;
+use anyhow::{Result, Context};
 use crate::debugger::{Debugger, ExecutionState};
 pub use state::State;
 pub use execute::Execute;
@@ -38,10 +38,12 @@ impl Emulator {
         use crate::utils::load_elf;
         
         // 获取状态的可变引用
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.write()
+            .expect("Failed to acquire state write lock");
         
         // 使用工具模块加载ELF
-        load_elf(&mut state, path)?;
+        load_elf(&mut state, path)
+            .with_context(|| format!("Failed to load ELF file from '{}'", path))?;
         
         Ok(())
     }
@@ -69,13 +71,13 @@ impl Emulator {
 
             loop {
                 // 获取当前PC
-                let pc = {
-                    let state = self.state.read().unwrap();
-                    state.get_pc()
-                };
+                let pc = self.state.read()
+                    .expect("Failed to acquire state read lock")
+                    .get_pc();
 
                 // 检查执行状态
-                match *control.state.lock().unwrap() {
+                match *control.state.lock()
+                    .expect("Failed to acquire execution control lock") {
                     ExecutionState::Stopped => {
                         thread::sleep(Duration::from_millis(10));
                         continue;
@@ -83,8 +85,10 @@ impl Emulator {
                     ExecutionState::Running => {
                         // 取指
                         let instruction = {
-                            let state = self.state.read().unwrap();
-                            state.fetch_instruction(pc)?
+                            let state = self.state.read()
+                                .expect("Failed to acquire state read lock");
+                            state.fetch_instruction(pc)
+                                .with_context(|| format!("Failed to fetch instruction at PC {:#x}", pc))?
                         };
                         
                         // 创建指令执行器
@@ -92,8 +96,11 @@ impl Emulator {
                         
                         // 执行指令
                         {
-                            let mut state = self.state.write().unwrap();
-                            executor.execute(&mut state)?;
+                            let mut state = self.state.write()
+                                .expect("Failed to acquire state write lock");
+                            executor.execute(&mut state)
+                                .with_context(|| format!("Failed to execute instruction {:#x} at PC {:#x}", 
+                                    instruction, pc))?;
                             // 更新PC（默认递增4字节）
                             state.set_pc(pc + 4);
                         }
@@ -106,23 +113,25 @@ impl Emulator {
         } else {
             // 无调试器，直接运行
             loop {
-                let pc = {
-                    let state = self.state.read().unwrap();
-                    state.get_pc()
-                };
-
-                let instruction = {
-                    let state = self.state.read().unwrap();
-                    state.fetch_instruction(pc)?
+                // 获取PC和指令
+                let (pc, instruction) = {
+                    let state = self.state.read()
+                        .expect("Failed to acquire state read lock");
+                    let pc = state.get_pc();
+                    let instruction = state.fetch_instruction(pc)
+                        .with_context(|| format!("Failed to fetch instruction at PC {:#x}", pc))?;
+                    (pc, instruction)
                 };
                 
+                // 执行指令
                 let mut executor = execute::RV64I::new(instruction);
+                let mut state = self.state.write()
+                    .expect("Failed to acquire state write lock");
                 
-                {
-                    let mut state = self.state.write().unwrap();
-                    executor.execute(&mut state)?;
-                    state.set_pc(pc + 4);
-                }
+                executor.execute(&mut state)
+                    .with_context(|| format!("Failed to execute instruction {:#x} at PC {:#x}", 
+                        instruction, pc))?;
+                state.set_pc(pc + 4);
             }
         }
     }

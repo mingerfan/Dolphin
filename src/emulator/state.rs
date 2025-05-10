@@ -1,7 +1,18 @@
 //! CPU状态管理
 
-use anyhow::Result;
+use anyhow::{Result, Context};
+use thiserror::Error;
 use super::memory::{Memory, MemoryError};
+
+#[derive(Debug, Error)]
+pub enum StateError {
+    #[error("寄存器访问错误: 寄存器 x{0} 超出范围")]
+    InvalidRegister(usize),
+    #[error("CSR访问错误: CSR {0:#x} 未找到")]
+    InvalidCsr(u16),
+    #[error("内存错误: {0}")]
+    Memory(#[from] MemoryError),
+}
 
 /// CPU状态
 pub struct State {
@@ -17,46 +28,59 @@ pub struct State {
 
 impl State {
     /// 创建新的CPU状态
-    pub fn new(memory_size: usize) -> Result<Self, MemoryError> {
+    pub fn new(memory_size: usize) -> Result<Self> {
         Ok(Self {
             registers: [0; 32],
             pc: 0x80000000,
             csrs: rustc_hash::FxHashMap::default(),
-            memory: Memory::new(memory_size)?,
+            memory: Memory::new(memory_size)
+                .with_context(|| format!("Failed to initialize memory with size {} bytes", memory_size))?,
         })
     }
 
     /// 读取内存
-    pub fn read_memory(&self, addr: u64, size: usize) -> Result<Vec<u8>, MemoryError> {
+    pub fn read_memory(&self, addr: u64, size: usize) -> Result<Vec<u8>> {
         self.memory.read(addr, size)
+            .with_context(|| format!("Failed to read {} bytes from address {:#x}", size, addr))
     }
 
     /// 写入内存
-    pub fn write_memory(&mut self, addr: u64, data: &[u8]) -> Result<(), MemoryError> {
+    pub fn write_memory(&mut self, addr: u64, data: &[u8]) -> Result<()> {
         self.memory.write(addr, data)
+            .with_context(|| format!("Failed to write {} bytes to address {:#x}", data.len(), addr))
     }
 
     /// 取指令
-    pub fn fetch_instruction(&self, pc: u64) -> Result<u32, MemoryError> {
-        let bytes = self.read_memory(pc, 4)?;
-        Ok(u32::from_le_bytes(bytes.try_into().unwrap()))
+    pub fn fetch_instruction(&self, pc: u64) -> Result<u32> {
+        let bytes = self.read_memory(pc, 4)
+            .with_context(|| format!("Failed to fetch instruction at PC {:#x}", pc))?;
+        bytes.try_into()
+            .map(u32::from_le_bytes)
+            .map_err(|_| anyhow::anyhow!("Invalid instruction bytes at PC {:#x}", pc))
     }
 
     /// 获取寄存器值
-    pub fn get_reg(&self, reg: usize) -> u64 {
-        if reg == 0 {
+    pub fn get_reg(&self, reg: usize) -> Result<u64> {
+        if reg >= self.registers.len() {
+            return Err(StateError::InvalidRegister(reg).into());
+        }
+        Ok(if reg == 0 {
             0 // x0 永远是0
         } else {
             self.registers[reg]
-        }
+        })
     }
 
     /// 设置寄存器值
-    pub fn set_reg(&mut self, reg: usize, value: u64) {
+    pub fn set_reg(&mut self, reg: usize, value: u64) -> Result<()> {
+        if reg >= self.registers.len() {
+            return Err(StateError::InvalidRegister(reg).into());
+        }
         if reg != 0 {
             // x0不可写
             self.registers[reg] = value;
         }
+        Ok(())
     }
 
     /// 获取PC值
@@ -70,12 +94,15 @@ impl State {
     }
 
     /// 获取CSR值
-    pub fn get_csr(&self, csr: u16) -> Option<u64> {
-        self.csrs.get(&csr).copied()
+    pub fn get_csr(&self, csr: u16) -> Result<u64> {
+        self.csrs.get(&csr)
+            .copied()
+            .ok_or_else(|| StateError::InvalidCsr(csr).into())
     }
 
     /// 设置CSR值
-    pub fn set_csr(&mut self, csr: u16, value: u64) {
+    pub fn set_csr(&mut self, csr: u16, value: u64) -> Result<()> {
         self.csrs.insert(csr, value);
+        Ok(())
     }
 }

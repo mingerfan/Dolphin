@@ -72,21 +72,24 @@ impl Memory {
     pub fn read_halfword(&self, addr: u64) -> Result<u16, MemoryError> {
         let real_addr = self.translate_address(addr, 2, 2)?;
         let bytes = self.data[real_addr as usize..(real_addr as usize + 2)].to_vec();
-        Ok(u16::from_le_bytes(bytes.try_into().unwrap()))
+        Ok(u16::from_le_bytes(bytes.try_into().map_err(|_| 
+            MemoryError::OutOfBounds { addr, size: 2 })?))
     }
 
     /// 读取字
     pub fn read_word(&self, addr: u64) -> Result<u32, MemoryError> {
         let real_addr = self.translate_address(addr, 4, 4)?;
         let bytes = self.data[real_addr as usize..(real_addr as usize + 4)].to_vec();
-        Ok(u32::from_le_bytes(bytes.try_into().unwrap()))
+        Ok(u32::from_le_bytes(bytes.try_into().map_err(|_| 
+            MemoryError::OutOfBounds { addr, size: 4 })?))
     }
 
     /// 读取双字
     pub fn read_doubleword(&self, addr: u64) -> Result<u64, MemoryError> {
         let real_addr = self.translate_address(addr, 8, 8)?;
         let bytes = self.data[real_addr as usize..(real_addr as usize + 8)].to_vec();
-        Ok(u64::from_le_bytes(bytes.try_into().unwrap()))
+        Ok(u64::from_le_bytes(bytes.try_into().map_err(|_| 
+            MemoryError::OutOfBounds { addr, size: 8 })?))
     }
 
     /// 写入字节

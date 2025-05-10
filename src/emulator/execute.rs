@@ -1,8 +1,10 @@
 //! 指令执行模块
 
+use anyhow::Context;
 use crate::emulator::State;
 use thiserror::Error;
 
+/// 所有可能的执行错误
 #[derive(Debug, Error)]
 pub enum ExecuteError {
     #[error("未实现的指令: {0:#010x}")]
@@ -16,7 +18,7 @@ pub enum ExecuteError {
 /// 指令执行trait
 pub trait Execute {
     /// 执行指令
-    fn execute(&mut self, state: &mut State) -> Result<(), ExecuteError>;
+    fn execute(&mut self, state: &mut State) -> anyhow::Result<()>;
 }
 
 /// RV64I基本指令集
@@ -41,7 +43,7 @@ impl RV64I {
 }
 
 impl Execute for RV64I {
-    fn execute(&mut self, state: &mut State) -> Result<(), ExecuteError> {
+    fn execute(&mut self, state: &mut State) -> anyhow::Result<()> {
         let (opcode, rd, rs1, rs2, funct3) = self.decode();
         
         match opcode {
@@ -53,7 +55,8 @@ impl Execute for RV64I {
                 // I-type 立即数指令
                 todo!("Implement I-type instructions")
             }
-            _ => Err(ExecuteError::UnimplementedInstruction(self.instruction)),
+            _ => Err(ExecuteError::UnimplementedInstruction(self.instruction))
+                .with_context(|| format!("Failed to execute instruction {:#x}", self.instruction)),
         }
     }
 }

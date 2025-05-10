@@ -37,7 +37,7 @@ impl RiscvTarget {
     }
 
     pub fn quit(&mut self) {
-        *self.control.state.lock().unwrap() = ExecutionState::Stopped;
+        *self.control.state.lock().expect("Failed to lock execution state mutex") = ExecutionState::Stopped;
     }
 }
 
@@ -59,11 +59,14 @@ impl SingleThreadBase for RiscvTarget {
         &mut self,
         regs: &mut <Self::Arch as Arch>::Registers,
     ) -> TargetResult<(), Self> {
-        let state = self.state.read().unwrap();
+        let state = self.state.read().expect("Failed to acquire state read lock");
 
         // 复制通用寄存器 (x0-x31)
         for i in 0..32 {
-            regs.x[i] = state.get_reg(i);
+            regs.x[i] = state.get_reg(i).map_err(|e| {
+                tracing::error!("Failed to read register x{}: {}", i, e);
+                TargetError::NonFatal
+            })?;
         }
         
         // 设置程序计数器
@@ -76,11 +79,14 @@ impl SingleThreadBase for RiscvTarget {
         &mut self,
         regs: &<Self::Arch as Arch>::Registers,
     ) -> TargetResult<(), Self> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.write().expect("Failed to acquire state write lock");
 
         // 写入通用寄存器
         for i in 0..32 {
-            state.set_reg(i, regs.x[i]);
+            state.set_reg(i, regs.x[i]).map_err(|e| {
+                tracing::error!("Failed to write register x{}: {}", i, e);
+                TargetError::NonFatal
+            })?;
         }
 
         // 写入程序计数器
@@ -91,19 +97,23 @@ impl SingleThreadBase for RiscvTarget {
     }
 
     fn read_addrs(&mut self, start_addr: u64, data: &mut [u8]) -> TargetResult<usize, Self> {
-        let state = self.state.read().unwrap();
-        let mem = state
-            .read_memory(start_addr, data.len())
-            .map_err(|_| TargetError::NonFatal)?;
+        let state = self.state.read().expect("Failed to acquire state read lock");
+        let mem = state.read_memory(start_addr, data.len())
+            .map_err(|e| {
+                tracing::error!("Memory read error at {:#x}: {}", start_addr, e);
+                TargetError::NonFatal
+            })?;
         data.copy_from_slice(&mem);
         Ok(mem.len())
     }
 
     fn write_addrs(&mut self, start_addr: u64, data: &[u8]) -> TargetResult<(), Self> {
-        let mut state = self.state.write().unwrap();
-        state
-            .write_memory(start_addr, data)
-            .map_err(|_| TargetError::NonFatal)?;
+        let mut state = self.state.write().expect("Failed to acquire state write lock");
+        state.write_memory(start_addr, data)
+            .map_err(|e| {
+                tracing::error!("Memory write error at {:#x}: {}", start_addr, e);
+                TargetError::NonFatal
+            })?;
         Ok(())
     }
 }
@@ -111,7 +121,7 @@ impl SingleThreadBase for RiscvTarget {
 impl SingleThreadResume for RiscvTarget {
     fn resume(&mut self, _signal: Option<Signal>) -> Result<(), Self::Error> {
         // 设置为运行状态
-        *self.control.state.lock().unwrap() = ExecutionState::Running;
+        *self.control.state.lock().expect("Failed to lock execution state mutex") = ExecutionState::Running;
         Ok(())
     }
 
@@ -125,12 +135,15 @@ impl SingleThreadResume for RiscvTarget {
 impl SingleThreadSingleStep for RiscvTarget {
     fn step(&mut self, _signal: Option<Signal>) -> Result<(), Self::Error> {
         // 设置为停止状态
-        *self.control.state.lock().unwrap() = ExecutionState::Stopped;
+        *self.control.state.lock().expect("Failed to lock execution state mutex") = ExecutionState::Stopped;
 
         // 执行一条指令
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.write().expect("Failed to acquire state write lock");
         let pc = state.get_pc();
-        let instruction = state.fetch_instruction(pc)?;
+        let instruction = state.fetch_instruction(pc).map_err(|e| {
+            tracing::error!("Failed to fetch instruction at {:#x}: {}", pc, e);
+            anyhow::anyhow!("Instruction fetch failed: {}", e)
+        })?;
 
         use crate::emulator::execute::RV64I;
         let mut executor = RV64I::new(instruction);
