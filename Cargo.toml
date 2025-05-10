@@ -1,0 +1,32 @@
+[package]
+name = "simulator"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "A RISC-V simulator implemented in Rust"
+
+[dependencies]
+# 错误处理
+anyhow = "1.0"
+thiserror = "1.0"
+
+# 命令行参数解析
+clap = { version = "4.0", features = ["derive"] }
+
+# 日志和追踪
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# 调试支持
+gdbstub = { version = "0.7.5", features = ["alloc"] }
+gdbstub_arch = { version = "0.3.1" }
+
+# 效率提升
+rustc-hash = "1.1"
+hex = "0.4"
+
+# ELF文件解析
+object = "0.32"
+
+[dev-dependencies]
+pretty_assertions = "1.4"
