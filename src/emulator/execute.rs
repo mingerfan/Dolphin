@@ -38,7 +38,7 @@ impl RV64I {
         let rs1 = (self.instruction >> 15) & 0x1f;
         let rs2 = (self.instruction >> 20) & 0x1f;
         let funct3 = (self.instruction >> 12) & 0x7;
-        (opcode, rd as u32, rs1 as u32, rs2 as u32, funct3)
+        (opcode, rd, rs1, rs2, funct3)
     }
 }
 
@@ -49,14 +49,14 @@ impl Execute for RV64I {
         match opcode {
             0x33 => {
                 // R-type 算术指令
-                todo!("Implement R-type instructions")
+                todo!("实现R类型指令")
             }
             0x13 => {
                 // I-type 立即数指令
-                todo!("Implement I-type instructions")
+                todo!("实现I类型指令")
             }
             _ => Err(ExecuteError::UnimplementedInstruction(self.instruction))
-                .with_context(|| format!("Failed to execute instruction {:#x}", self.instruction)),
+                .with_context(|| format!("无法执行指令 {:#x}", self.instruction)),
         }
     }
 }

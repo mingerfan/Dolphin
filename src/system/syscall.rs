@@ -32,7 +32,7 @@ pub struct SyscallContext {
 
 /// Linux系统调用号
 #[allow(dead_code)]
-mod syscall {
+mod syscall_num {
     pub const SYS_EXIT: u64 = 93;
     pub const SYS_EXIT_GROUP: u64 = 94;
     pub const SYS_READ: u64 = 63;
@@ -46,12 +46,12 @@ mod syscall {
 /// 处理系统调用
 pub fn handle_syscall(ctx: SyscallContext, memory: &mut Memory) -> Result<u64, SyscallError> {
     match ctx.number {
-        syscall::SYS_EXIT | syscall::SYS_EXIT_GROUP => {
+        syscall_num::SYS_EXIT | syscall_num::SYS_EXIT_GROUP => {
             // 程序退出
             std::process::exit(ctx.arg0 as i32);
         }
         
-        syscall::SYS_WRITE => {
+        syscall_num::SYS_WRITE => {
             // 写入文件
             let fd = ctx.arg0;
             let buf_ptr = ctx.arg1;
@@ -73,13 +73,13 @@ pub fn handle_syscall(ctx: SyscallContext, memory: &mut Memory) -> Result<u64, S
             } else {
                 io::stderr().write_all(&data)
             }.map_err(|e| {
-                SyscallError::InvalidArgument(format!("写入失败: {}", e))
+                SyscallError::InvalidArgument(format!("输出写入失败: {}", e))
             })?;
             
             Ok(count)
         }
         
-        syscall::SYS_BRK => {
+        syscall_num::SYS_BRK => {
             // 简单返回，不实际分配内存
             Ok(ctx.arg0)
         }

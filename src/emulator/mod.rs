@@ -6,9 +6,6 @@ mod memory;
 mod state;
 
 use anyhow::{Context, Result};
-use std::sync::{Arc, RwLock};
-use std::thread;
-use std::time::Duration;
 
 pub use exception::Exception;
 pub use execute::Execute;
@@ -18,7 +15,7 @@ pub use state::State;
 /// 模拟器结构体
 pub struct Emulator {
     /// CPU状态（包含内存）
-    state: Arc<RwLock<State>>,
+    state: State,
     /// 调试器（可选）
     debugger: bool,
 }
@@ -28,7 +25,7 @@ impl Emulator {
     pub fn new(memory_size: usize) -> Result<Self> {
         let state = State::new(memory_size)?;
         Ok(Self {
-            state: Arc::new(RwLock::new(state)),
+            state,
             debugger: false,
         })
     }
@@ -37,15 +34,9 @@ impl Emulator {
     pub fn load_elf(&mut self, path: &str) -> Result<()> {
         use crate::utils::load_elf;
 
-        // 获取状态的可变引用
-        let mut state = self
-            .state
-            .write()
-            .expect("Failed to acquire state write lock");
-
         // 使用工具模块加载ELF
-        load_elf(&mut state, path)
-            .with_context(|| format!("Failed to load ELF file from '{}'", path))?;
+        load_elf(&mut self.state, path)
+            .with_context(|| format!("无法从 '{}' 加载ELF文件", path))?;
 
         Ok(())
     }
@@ -65,36 +56,28 @@ impl Emulator {
         loop {
             // 获取PC和指令
             let (pc, instruction) = {
-                let state = self
-                    .state
-                    .read()
-                    .expect("Failed to acquire state read lock");
-                let pc = state.get_pc();
-                let instruction = state
+                let pc = self.state.get_pc();
+                let instruction = self.state
                     .fetch_instruction(pc)
-                    .with_context(|| format!("Failed to fetch instruction at PC {:#x}", pc))?;
+                    .with_context(|| format!("无法从PC {:#x} 处读取指令", pc))?;
                 (pc, instruction)
             };
 
             // 执行指令
             let mut executor = execute::RV64I::new(instruction);
-            let mut state = self
-                .state
-                .write()
-                .expect("Failed to acquire state write lock");
 
-            executor.execute(&mut state).with_context(|| {
+            executor.execute(&mut self.state).with_context(|| {
                 format!(
-                    "Failed to execute instruction {:#x} at PC {:#x}",
+                    "无法执行PC {:#x} 处的指令 {:#x}",
                     instruction, pc
                 )
             })?;
-            state.set_pc(pc + 4);
+            self.state.set_pc(pc + 4);
         }
     }
 
     /// 获取处理器状态引用
-    pub fn get_state(&self) -> Arc<RwLock<State>> {
+    pub fn get_state(&self) -> State {
         self.state.clone()
     }
 }

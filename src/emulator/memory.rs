@@ -13,7 +13,7 @@ pub enum MemoryError {
 }
 
 /// 内存管理结构
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Memory {
     /// 内存数据
     data: Vec<u8>,

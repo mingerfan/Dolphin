@@ -9,9 +9,9 @@ use crate::emulator::State;
 pub fn load_elf(state: &mut State, path: &str) -> Result<()> {
     // 读取ELF文件
     let elf_data = fs::read(path)
-        .with_context(|| format!("Failed to read ELF file '{}'", path))?;
+        .with_context(|| format!("无法读取ELF文件 '{}'", path))?;
     let elf_file = object::File::parse(&*elf_data)
-        .with_context(|| format!("Failed to parse ELF file '{}'", path))?;
+        .with_context(|| format!("无法解析ELF文件 '{}'", path))?;
 
     // 验证目标架构
     if !matches!(elf_file.architecture(), Architecture::Riscv64) {
@@ -31,11 +31,11 @@ pub fn load_elf(state: &mut State, path: &str) -> Result<()> {
         let addr = section.address();
         
         let data = section.data()
-            .with_context(|| format!("Failed to read section '{}' data", section_name))?;
+            .with_context(|| format!("无法读取节 '{}' 的数据", section_name))?;
 
         // 写入内存
         state.write_memory(addr, data)
-            .with_context(|| format!("Failed to write section '{}' at address {:#x}", 
+            .with_context(|| format!("无法将节 '{}' 写入地址 {:#x}", 
                 section_name, addr))?;
     }
 

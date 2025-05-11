@@ -1,8 +1,8 @@
 //! CPU状态管理
 
-use anyhow::{Result, Context};
-use thiserror::Error;
 use super::memory::{Memory, MemoryError};
+use anyhow::Result;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum StateError {
@@ -12,9 +12,12 @@ pub enum StateError {
     InvalidCsr(u16),
     #[error("内存错误: {0}")]
     Memory(#[from] MemoryError),
+    #[error("指令错误: 无效的指令字节, pc={0:#x}")]
+    InvalidInstructionBytes(u64),
 }
 
 /// CPU状态
+#[derive(Debug, Clone)]
 pub struct State {
     // 通用寄存器
     registers: [u64; 32],
@@ -33,30 +36,28 @@ impl State {
             registers: [0; 32],
             pc: 0x80000000,
             csrs: rustc_hash::FxHashMap::default(),
-            memory: Memory::new(memory_size)
-                .with_context(|| format!("Failed to initialize memory with size {} bytes", memory_size))?,
+            memory: Memory::new(memory_size)?,
         })
     }
 
     /// 读取内存
     pub fn read_memory(&self, addr: u64, size: usize) -> Result<Vec<u8>> {
-        self.memory.read(addr, size)
-            .with_context(|| format!("Failed to read {} bytes from address {:#x}", size, addr))
+        Ok(self.memory.read(addr, size)?)
     }
 
     /// 写入内存
     pub fn write_memory(&mut self, addr: u64, data: &[u8]) -> Result<()> {
-        self.memory.write(addr, data)
-            .with_context(|| format!("Failed to write {} bytes to address {:#x}", data.len(), addr))
+        Ok(self.memory.write(addr, data)?)
     }
 
     /// 取指令
     pub fn fetch_instruction(&self, pc: u64) -> Result<u32> {
-        let bytes = self.read_memory(pc, 4)
-            .with_context(|| format!("Failed to fetch instruction at PC {:#x}", pc))?;
-        bytes.try_into()
+        let bytes = self
+            .read_memory(pc, 4)?;
+        Ok(bytes
+            .try_into()
             .map(u32::from_le_bytes)
-            .map_err(|_| anyhow::anyhow!("Invalid instruction bytes at PC {:#x}", pc))
+            .map_err(|_| StateError::InvalidInstructionBytes(pc))?)
     }
 
     /// 获取寄存器值
@@ -95,7 +96,8 @@ impl State {
 
     /// 获取CSR值
     pub fn get_csr(&self, csr: u16) -> Result<u64> {
-        self.csrs.get(&csr)
+        self.csrs
+            .get(&csr)
             .copied()
             .ok_or_else(|| StateError::InvalidCsr(csr).into())
     }
