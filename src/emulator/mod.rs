@@ -12,7 +12,11 @@ pub use exception::Exception;
 pub use execute::Execute;
 pub use memory::{Memory, MemoryError};
 pub use state::State;
+use std::collections::HashSet;
+use nohash_hasher::{self, BuildNoHashHasher};
 
+
+type NoHashHashSet<T> = HashSet<T, BuildNoHashHasher<T>>;
 /// 模拟器结构体
 pub struct Emulator {
     /// CPU状态（包含内存）
@@ -21,6 +25,8 @@ pub struct Emulator {
     debugger: bool,
     exec_state: ExecState,
     event: Event,
+    breakpoints: NoHashHashSet<u64>,
+    watchpoints: NoHashHashSet<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -41,8 +47,8 @@ pub enum Event {
     DoneStep,
     Halted,
     Break,
-    WatchWrite(u32),
-    WatchRead(u32),
+    WatchWrite(u64),
+    WatchRead(u64),
 }
 
 impl Emulator {
@@ -54,6 +60,8 @@ impl Emulator {
             debugger: false,
             exec_state: ExecState::Idle,
             event: Event::None,
+            breakpoints: NoHashHashSet::default(),
+            watchpoints: NoHashHashSet::default(),
         })
     }
 
@@ -106,5 +114,9 @@ impl Emulator {
     /// 获取处理器状态引用
     pub fn get_state(&self) -> State {
         self.state.clone()
+    }
+
+    pub fn get_state_ref(&self) -> &State {
+        &self.state
     }
 }

@@ -27,4 +27,5 @@ hex = "0.4"
 
 # ELF文件解析
 object = "0.32"
+nohash-hasher = "0.2.0"
 

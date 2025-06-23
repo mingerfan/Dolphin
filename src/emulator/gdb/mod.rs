@@ -1,7 +1,8 @@
-use super::Emulator;
+mod breakpoints;
+
+use crate::emulator::Emulator;
 use anyhow::Result;
 use gdbstub::target::ext::base::singlethread::SingleThreadBase;
-use gdbstub::target::ext::breakpoints::{Breakpoints, SwBreakpoint};
 use gdbstub::target::{self, Target};
 use gdbstub_arch::riscv::reg::id::RiscvRegId;
 use std::net::{TcpListener, TcpStream};
@@ -25,12 +26,12 @@ impl Target for Emulator {
         target::ext::base::BaseOps::SingleThread(self)
     }
 
-    // #[inline(always)]
-    // fn support_breakpoints(
-    //     &mut self,
-    // ) -> Option<target::ext::breakpoints::BreakpointsOps<'_, Self>> {
-    //     Some(self)
-    // }
+    #[inline(always)]
+    fn support_breakpoints(
+        &mut self,
+    ) -> Option<target::ext::breakpoints::BreakpointsOps<'_, Self>> {
+        Some(self)
+    }
 
 }
 
