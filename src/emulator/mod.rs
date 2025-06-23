@@ -169,5 +169,4 @@ impl Emulator {
         self.event
     }
 
-    
 }
