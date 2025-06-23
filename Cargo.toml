@@ -1,8 +1,8 @@
 [package]
 name = "simulator"
 version = "0.1.0"
-edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
+edition = "2024"
+authors = ["mingerfan"]
 description = "A RISC-V simulator implemented in Rust"
 
 [dependencies]
@@ -28,5 +28,3 @@ hex = "0.4"
 # ELF文件解析
 object = "0.32"
 
-[dev-dependencies]
-pretty_assertions = "1.4"

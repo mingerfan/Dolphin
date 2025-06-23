@@ -4,6 +4,7 @@ mod exception;
 pub mod execute;
 mod memory;
 mod state;
+mod gdb;
 
 use anyhow::{Context, Result};
 
@@ -18,6 +19,30 @@ pub struct Emulator {
     state: State,
     /// 调试器（可选）
     debugger: bool,
+    exec_state: ExecState,
+    event: Event,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum ExecState {
+    #[default]
+    Idle,
+    Running,
+    Stopped,
+    End,
+    Error(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum Event {
+    #[default]
+    None,
+    IncomingData,
+    DoneStep,
+    Halted,
+    Break,
+    WatchWrite(u32),
+    WatchRead(u32),
 }
 
 impl Emulator {
@@ -27,6 +52,8 @@ impl Emulator {
         Ok(Self {
             state,
             debugger: false,
+            exec_state: ExecState::Idle,
+            event: Event::None,
         })
     }
 
@@ -69,7 +96,7 @@ impl Emulator {
             executor.execute(&mut self.state).with_context(|| {
                 format!(
                     "无法执行PC {:#x} 处的指令 {:#x}",
-                    instruction, pc
+                    pc, instruction
                 )
             })?;
             self.state.set_pc(pc + 4);

@@ -1,6 +1,5 @@
 //! 指令执行模块
 
-use anyhow::Context;
 use crate::emulator::State;
 use thiserror::Error;
 
@@ -55,8 +54,7 @@ impl Execute for RV64I {
                 // I-type 立即数指令
                 todo!("实现I类型指令")
             }
-            _ => Err(ExecuteError::UnimplementedInstruction(self.instruction))
-                .with_context(|| format!("无法执行指令 {:#x}", self.instruction)),
+            _ => Err(ExecuteError::UnimplementedInstruction(self.instruction))?,
         }
     }
 }

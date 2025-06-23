@@ -60,6 +60,10 @@ impl State {
             .map_err(|_| StateError::InvalidInstructionBytes(pc))?)
     }
 
+    pub fn get_regs(&self) -> &[u64; 32] {
+        &self.registers
+    }
+
     /// 获取寄存器值
     pub fn get_reg(&self, reg: usize) -> Result<u64> {
         if reg >= self.registers.len() {
