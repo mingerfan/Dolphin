@@ -2,19 +2,22 @@
 
 mod exception;
 pub mod execute;
+mod gdb;
 mod memory;
 mod state;
-mod gdb;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Ok, Result};
 
 pub use exception::Exception;
 pub use execute::Execute;
+use gdbstub::conn::{Connection, ConnectionExt};
+use gdbstub::stub::{SingleThreadStopReason, run_blocking};
+use gdbstub::target::Target;
 pub use memory::{Memory, MemoryError};
+use nohash_hasher::{self, BuildNoHashHasher};
 pub use state::State;
 use std::collections::HashSet;
-use nohash_hasher::{self, BuildNoHashHasher};
-
+use crate::{const_values, utils::ringbuf::RingBuffer};
 
 type NoHashHashSet<T> = HashSet<T, BuildNoHashHasher<T>>;
 /// 模拟器结构体
@@ -25,21 +28,50 @@ pub struct Emulator {
     debugger: bool,
     exec_state: ExecState,
     event: Event,
+    event_list: RingBuffer<Event>,
     breakpoints: NoHashHashSet<u64>,
     watchpoints: NoHashHashSet<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+enum EmuGdbEventLoop {}
+
+impl run_blocking::BlockingEventLoop for EmuGdbEventLoop {
+    type Target = Emulator;
+
+    type Connection = Box<dyn ConnectionExt<Error = std::io::Error>>;
+
+    type StopReason = SingleThreadStopReason<u64>;
+
+    fn wait_for_stop_reason(
+        target: &mut Self::Target,
+        conn: &mut Self::Connection,
+    ) -> std::result::Result<
+        run_blocking::Event<Self::StopReason>,
+        run_blocking::WaitForStopReasonError<
+            <Self::Target as Target>::Error,
+            <Self::Connection as Connection>::Error,
+        >,
+    > {
+        todo!()
+    }
+
+    fn on_interrupt(
+        target: &mut Self::Target,
+    ) -> std::result::Result<Option<Self::StopReason>, <Self::Target as Target>::Error> {
+        todo!()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum ExecState {
     #[default]
     Idle,
     Running,
-    Stopped,
     End,
-    Error(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Event {
     #[default]
     None,
@@ -60,6 +92,7 @@ impl Emulator {
             debugger: false,
             exec_state: ExecState::Idle,
             event: Event::None,
+            event_list: RingBuffer::new(const_values::EVENT_LIST_SIZE),
             breakpoints: NoHashHashSet::default(),
             watchpoints: NoHashHashSet::default(),
         })
@@ -77,22 +110,21 @@ impl Emulator {
     }
 
     /// 启用调试模式
-    pub fn enable_debug(&mut self, _port: u16) -> Result<()> {
+    pub fn enable_debug(&mut self) -> Result<()> {
         self.debugger = true;
-
         Ok(())
     }
 
     /// 运行模拟器
-    pub fn run(&mut self) -> Result<()> {
-        // TODO: 调试器支持
-
-        // 无调试器，直接运行
-        loop {
+    pub fn step(&mut self, n: usize) -> Result<()> {
+        self.exec_state = ExecState::Running;
+        for _ in 0..n {
+            self.event = Event::None; // 重置事件
             // 获取PC和指令
             let (pc, instruction) = {
                 let pc = self.state.get_pc();
-                let instruction = self.state
+                let instruction = self
+                    .state
                     .fetch_instruction(pc)
                     .with_context(|| format!("无法从PC {:#x} 处读取指令", pc))?;
                 (pc, instruction)
@@ -101,14 +133,18 @@ impl Emulator {
             // 执行指令
             let mut executor = execute::RV64I::new(instruction);
 
-            executor.execute(&mut self.state).with_context(|| {
-                format!(
-                    "无法执行PC {:#x} 处的指令 {:#x}",
-                    pc, instruction
-                )
-            })?;
+            executor
+                .execute(&mut self.state)
+                .with_context(|| format!("无法执行PC {:#x} 处的指令 {:#x}", pc, instruction))?;
             self.state.set_pc(pc + 4);
+
+            // 捕获除了None以外的event，放入事件列表
+            if self.debugger && self.event != Event::None {
+                self.event_list.push_overwrite(self.event);
+            }
         }
+        self.exec_state = ExecState::Idle;
+        Ok(())
     }
 
     /// 获取处理器状态引用
@@ -119,4 +155,19 @@ impl Emulator {
     pub fn get_state_ref(&self) -> &State {
         &self.state
     }
+
+    // 返回事件列表
+    pub fn get_events(&mut self) -> Vec<Event> {
+        let mut events = Vec::new();
+        while let Result::Ok(event) = self.event_list.pop() {
+            events.push(event);
+        }
+        events
+    }
+
+    pub fn get_cur_event(&self) -> Event {
+        self.event
+    }
+
+    
 }

@@ -8,7 +8,7 @@ use gdbstub_arch::riscv::reg::id::RiscvRegId;
 use std::net::{TcpListener, TcpStream};
 use tracing::info;
 
-fn wait_for_tcp(port: u16) -> Result<TcpStream> {
+pub fn wait_for_tcp(port: u16) -> Result<TcpStream> {
     let sock_addr = format!("localhost:{}", port);
     info!(port, "等待TCP连接: {}", sock_addr);
     let sock = TcpListener::bind(sock_addr)?;

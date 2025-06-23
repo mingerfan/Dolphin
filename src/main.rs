@@ -56,12 +56,11 @@ fn main() -> Result<()> {
         emu.load_elf(&elf_path)?;
     }
     
-    // if args.debug {
-    //     info!(port = args.port, "启用调试模式");
-    //     emu.enable_debug(args.port)?;
-    // }
-    emu.enable_debug(args.port)?;
+    if args.debug {
+        info!(port = args.port, "启用调试模式");
+        emu.enable_debug()?;
+    }
     
     // 运行模拟器
-    emu.run()
+    emu.step(usize::MAX)
 }
