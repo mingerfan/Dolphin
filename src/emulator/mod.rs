@@ -8,6 +8,8 @@ mod state;
 
 use anyhow::{Context, Ok, Result};
 
+use crate::utils::disasm_riscv64_instruction;
+use crate::{const_values, utils::ringbuf::RingBuffer};
 pub use exception::Exception;
 pub use execute::Execute;
 use gdbstub::conn::{Connection, ConnectionExt};
@@ -17,7 +19,6 @@ pub use memory::{Memory, MemoryError};
 use nohash_hasher::{self, BuildNoHashHasher};
 pub use state::State;
 use std::collections::HashSet;
-use crate::{const_values, utils::ringbuf::RingBuffer};
 
 type NoHashHashSet<T> = HashSet<T, BuildNoHashHasher<T>>;
 /// 模拟器结构体
@@ -133,9 +134,14 @@ impl Emulator {
             // 执行指令
             let mut executor = execute::RV64I::new(instruction);
 
-            executor
-                .execute(&mut self.state)
-                .with_context(|| format!("无法执行PC {:#x} 处的指令 {:#x}", pc, instruction))?;
+            executor.execute(&mut self.state).with_context(|| {
+                let instruction_msg =
+                    disasm_riscv64_instruction(instruction, pc).unwrap_or("未知指令".to_string());
+                format!(
+                    "无法执行PC {:#010x} 处的指令 {:#010x} ({})",
+                    pc, instruction, instruction_msg
+                )
+            })?;
             self.state.set_pc(pc + 4);
 
             // 捕获除了None以外的event，放入事件列表
@@ -168,5 +174,4 @@ impl Emulator {
     pub fn get_cur_event(&self) -> Event {
         self.event
     }
-
 }

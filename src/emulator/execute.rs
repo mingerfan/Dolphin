@@ -44,7 +44,7 @@ impl RV64I {
 impl Execute for RV64I {
     fn execute(&mut self, state: &mut State) -> anyhow::Result<()> {
         let (opcode, rd, rs1, rs2, funct3) = self.decode();
-        
+
         match opcode {
             0x33 => {
                 // R-type 算术指令

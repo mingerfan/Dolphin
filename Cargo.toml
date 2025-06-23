@@ -29,3 +29,5 @@ hex = "0.4"
 object = "0.32"
 nohash-hasher = "0.2.0"
 
+# 反汇编支持
+capstone = "0.12"
