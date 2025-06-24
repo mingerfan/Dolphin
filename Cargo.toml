@@ -17,9 +17,9 @@ clap = { version = "4.0", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# 调试支持
-gdbstub = { version = "0.7.5", features = ["alloc"] }
-gdbstub_arch = { version = "0.3.1" }
+# 调试支持 - 设置为可选依赖
+gdbstub = { version = "0.7.5", features = ["alloc"], optional = true }
+gdbstub_arch = { version = "0.3.1", optional = true }
 
 # 效率提升
 rustc-hash = "1.1"
@@ -31,3 +31,6 @@ nohash-hasher = "0.2.0"
 
 # 反汇编支持
 capstone = "0.12"
+
+[features]
+gdb = ["gdbstub", "gdbstub_arch"]  # 新增 GDB 特性

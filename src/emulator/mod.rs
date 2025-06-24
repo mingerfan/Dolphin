@@ -2,6 +2,7 @@
 
 mod exception;
 pub mod execute;
+#[cfg(feature = "gdb")] // 条件编译 GDB 模块
 pub mod gdb;
 mod memory;
 pub mod state;
@@ -11,10 +12,15 @@ use crate::{const_values, utils::ringbuf::RingBuffer};
 use anyhow::{Context, Result};
 pub use exception::Exception;
 pub use execute::Execute;
+#[cfg(feature = "gdb")] // 条件导入 GDB 相关
 use gdbstub::common::Signal;
+#[cfg(feature = "gdb")] // 条件导入 GDB 相关
 use gdbstub::conn::{Connection, ConnectionExt};
+#[cfg(feature = "gdb")] // 条件导入 GDB 相关
 use gdbstub::stub::{SingleThreadStopReason, run_blocking};
+#[cfg(feature = "gdb")] // 条件导入 GDB 相关
 use gdbstub::target::Target;
+#[cfg(feature = "gdb")] // 条件导入 GDB 相关
 use gdbstub::target::ext::breakpoints::WatchKind;
 pub use memory::{Memory, MemoryError};
 use nohash_hasher::{self, BuildNoHashHasher};
@@ -37,8 +43,10 @@ pub struct Emulator {
     watchpoints: NoHashHashSet<u64>,
 }
 
+#[cfg(feature = "gdb")] // 条件编译 GDB 事件循环
 pub enum EmuGdbEventLoop {}
 
+#[cfg(feature = "gdb")] // 条件编译 GDB 事件循环实现
 impl run_blocking::BlockingEventLoop for EmuGdbEventLoop {
     type Target = Emulator;
 
@@ -177,6 +185,11 @@ impl Emulator {
         self.debugger = true;
         self.exec_mode = ExecMode::Continue; // 设置执行模式为连续执行
         Ok(())
+    }
+    
+    /// 检查是否启用调试模式
+    pub fn is_debug_enabled(&self) -> bool {
+        self.debugger
     }
 
     #[inline(always)]
