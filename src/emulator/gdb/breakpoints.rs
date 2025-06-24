@@ -23,7 +23,7 @@ impl target::ext::breakpoints::SwBreakpoint for Emulator {
         addr: <Self::Arch as gdbstub::arch::Arch>::Usize,
         _kind: <Self::Arch as gdbstub::arch::Arch>::BreakpointKind,
     ) -> target::TargetResult<bool, Self> {
-        self.breakpoints.insert(addr);
+        self.gdb_data.breakpoints.insert(addr);
         Ok(true)
     }
 
@@ -32,7 +32,7 @@ impl target::ext::breakpoints::SwBreakpoint for Emulator {
         addr: <Self::Arch as gdbstub::arch::Arch>::Usize,
         _kind: <Self::Arch as gdbstub::arch::Arch>::BreakpointKind,
     ) -> target::TargetResult<bool, Self> {
-        Ok(self.breakpoints.remove(&addr))
+        Ok(self.gdb_data.breakpoints.remove(&addr))
     }
 }
 
@@ -44,7 +44,7 @@ impl target::ext::breakpoints::HwWatchpoint for Emulator {
         _kind: target::ext::breakpoints::WatchKind,
     ) -> target::TargetResult<bool, Self> {
         for addr in addr..(addr + len) {
-            self.watchpoints.insert(addr);
+            self.gdb_data.watchpoints.insert(addr);
         }
         Ok(true)
     }
@@ -56,7 +56,7 @@ impl target::ext::breakpoints::HwWatchpoint for Emulator {
         _kind: target::ext::breakpoints::WatchKind,
     ) -> target::TargetResult<bool, Self> {
         for addr in addr..(addr + len) {
-            if !self.watchpoints.remove(&addr) {
+            if !self.gdb_data.watchpoints.remove(&addr) {
                 return Ok(false);
             }
         }

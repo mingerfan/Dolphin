@@ -4,18 +4,17 @@ pub mod emulator;
 pub mod system;
 pub mod utils;
 
-use emulator::Emulator;
 use anyhow::Result;
 use clap::Parser;
+use emulator::Emulator;
 use tracing::info;
 
 // 仅在启用 GDB feature 时导入相关模块
 #[cfg(feature = "gdb")]
 use {
-    emulator::{gdb, EmuGdbEventLoop},
-    gdbstub::{conn::ConnectionExt, stub::GdbStub}
+    emulator::{EmuGdbEventLoop, gdb},
+    gdbstub::{conn::ConnectionExt, stub::GdbStub},
 };
-
 
 /// RISC-V 模拟器
 #[derive(Parser, Debug)]
@@ -24,10 +23,6 @@ pub struct Args {
     /// ELF文件路径
     #[arg(short, long)]
     pub elf: Option<String>,
-
-    /// 是否启用调试模式
-    #[arg(short, long)]
-    pub debug: bool,
 
     /// GDB端口
     #[arg(short, long, default_value = "1234")]
@@ -47,31 +42,24 @@ pub fn build_emu_run_blocking(args: Args) -> Result<()> {
         emu.load_elf(&elf_path)?;
     }
 
-    if args.debug {
-        #[cfg(feature = "gdb")] // 条件编译 GDB 支持
-        {
-            info!(port = args.port, "启用调试模式");
-            let connection: Box<dyn ConnectionExt<Error = std::io::Error>> =
-                Box::new(gdb::wait_for_tcp(args.port)?);
+    #[cfg(feature = "gdb")] // 条件编译 GDB 支持
+    {
+        info!(port = args.port, "启用调试模式");
+        let connection: Box<dyn ConnectionExt<Error = std::io::Error>> =
+            Box::new(gdb::wait_for_tcp(args.port)?);
 
-            let gdb_conn = GdbStub::new(connection);
+        let gdb_conn = GdbStub::new(connection);
 
-            match gdb_conn.run_blocking::<EmuGdbEventLoop>(&mut emu) {
-                Ok(_) => info!("GDB调试会话结束"),
-                Err(e) => {
-                    tracing::error!("GDB调试会话出错");
-                    return Err(e.into());
-                }
-            };
-        }
-        
-        #[cfg(not(feature = "gdb"))] // 未启用 GDB feature
-        {
-            return Err(anyhow::anyhow!(
-                "GDB 支持未启用，请使用 'cargo build --features gdb' 重新编译"
-            ));
-        }
-    } else {
+        match gdb_conn.run_blocking::<EmuGdbEventLoop>(&mut emu) {
+            Ok(_) => info!("GDB调试会话结束"),
+            Err(e) => {
+                tracing::error!("GDB调试会话出错");
+                return Err(e.into());
+            }
+        };
+    }
+    #[cfg(not(feature = "gdb"))] // 如果没有启用 GDB
+    {
         // 运行模拟器
         while emu.get_exec_state() != emulator::ExecState::End {
             // 执行模拟器步骤

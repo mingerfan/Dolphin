@@ -2,7 +2,9 @@
 
 mod breakpoints;
 
-use crate::emulator::{Emulator, ExecMode};
+use std::collections::HashSet;
+use nohash_hasher::{self, BuildNoHashHasher};
+use crate::emulator::Emulator;
 use anyhow::Result;
 use gdbstub::target::ext::base::single_register_access::SingleRegisterAccess;
 use gdbstub::target::ext::base::singlethread::{
@@ -12,6 +14,137 @@ use gdbstub::target::{self, Target};
 use gdbstub_arch::riscv::reg::id::RiscvRegId;
 use std::net::{TcpListener, TcpStream};
 use tracing::info;
+
+use gdbstub::common::Signal;
+use gdbstub::conn::{Connection, ConnectionExt};
+use gdbstub::stub::{SingleThreadStopReason, run_blocking};
+use gdbstub::target::ext::breakpoints::WatchKind;
+use super::state::{Event, ExecMode, ExecState};
+
+type NoHashHashSet<T> = HashSet<T, BuildNoHashHasher<T>>;
+
+pub struct GdbData {
+    pub breakpoints: NoHashHashSet<u64>,
+    pub watchpoints: NoHashHashSet<u64>,
+}
+
+impl GdbData {
+    pub fn new() -> Self {
+        Self {
+            breakpoints: NoHashHashSet::default(),
+            watchpoints: NoHashHashSet::default(),
+        }
+    }
+}
+
+pub enum EmuGdbEventLoop {}
+
+impl run_blocking::BlockingEventLoop for EmuGdbEventLoop {
+    type Target = Emulator;
+
+    type Connection = Box<dyn ConnectionExt<Error = std::io::Error>>;
+
+    type StopReason = SingleThreadStopReason<u64>;
+
+    fn wait_for_stop_reason(
+        target: &mut Self::Target,
+        conn: &mut Self::Connection,
+    ) -> std::result::Result<
+        run_blocking::Event<Self::StopReason>,
+        run_blocking::WaitForStopReasonError<
+            <Self::Target as Target>::Error,
+            <Self::Connection as Connection>::Error,
+        >,
+    > {
+        let mode = target.get_exec_mode();
+        let mut cnt = match mode {
+            ExecMode::Step => 1,
+            ExecMode::Continue => usize::MAX,
+            ExecMode::RangeStep(start, end) => {
+                if target.get_state_ref().get_pc() >= end {
+                    return Ok(run_blocking::Event::TargetStopped(
+                        SingleThreadStopReason::Exited(0),
+                    ));
+                }
+                (end - start) as usize
+            }
+            _ => 1, // 默认单步执行
+        };
+        let mut delay_cycles = 0;
+        while target.get_exec_state() != ExecState::End {
+            if delay_cycles >= 1000 && conn.peek().is_ok() {
+                let byte = conn
+                    .read()
+                    .map_err(run_blocking::WaitForStopReasonError::Connection)?;
+                return Ok(run_blocking::Event::IncomingData(byte));
+            }
+
+            match target.step() {
+                Ok(_) => match target.event {
+                    Event::None => (),
+                    Event::Halted => {
+                        return Ok(run_blocking::Event::TargetStopped(
+                            SingleThreadStopReason::Exited(0),
+                        ));
+                    }
+                    Event::Break => {
+                        return Ok(run_blocking::Event::TargetStopped(
+                            SingleThreadStopReason::Terminated(Signal::SIGSTOP),
+                        ));
+                    }
+                    Event::WatchWrite(addr) => {
+                        return Ok(run_blocking::Event::TargetStopped(
+                            SingleThreadStopReason::Watch {
+                                tid: (),
+                                kind: WatchKind::Write,
+                                addr,
+                            },
+                        ));
+                    }
+                    Event::WatchRead(addr) => {
+                        return Ok(run_blocking::Event::TargetStopped(
+                            SingleThreadStopReason::Watch {
+                                tid: (),
+                                kind: WatchKind::Read,
+                                addr,
+                            },
+                        ));
+                    }
+                },
+                Err(e) => {
+                    let error_msg = format!("gdb调试过程中出现执行错误: {}", e);
+                    // 打印错误信息
+                    tracing::error!("{}", error_msg);
+                    tracing::error!("CPU状态:\n{}", target.get_state_ref());
+                    return Err(run_blocking::WaitForStopReasonError::Target(error_msg));
+                }
+            }
+            if mode != ExecMode::Continue {
+                cnt -= 1;
+                if cnt == 0 {
+                    return Ok(run_blocking::Event::TargetStopped(
+                        SingleThreadStopReason::DoneStep,
+                    ));
+                }
+            }
+            if delay_cycles >= 1000 {
+                delay_cycles = 0; // 重置延迟计数器
+            } else {
+                delay_cycles += 1;
+            }
+        }
+        Ok(run_blocking::Event::TargetStopped(
+            SingleThreadStopReason::DoneStep,
+        ))
+    }
+
+    fn on_interrupt(
+        _target: &mut Self::Target,
+    ) -> std::result::Result<Option<Self::StopReason>, <Self::Target as Target>::Error> {
+        Ok(Some(SingleThreadStopReason::Signal(Signal::SIGINT)))
+    }
+}
+
 
 pub fn wait_for_tcp(port: u16) -> Result<TcpStream> {
     let sock_addr = format!("localhost:{}", port);

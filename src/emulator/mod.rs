@@ -12,160 +12,44 @@ use crate::{const_values, utils::ringbuf::RingBuffer};
 use anyhow::{Context, Result};
 pub use exception::Exception;
 pub use execute::Execute;
-#[cfg(feature = "gdb")] // 条件导入 GDB 相关
-use gdbstub::common::Signal;
-#[cfg(feature = "gdb")] // 条件导入 GDB 相关
-use gdbstub::conn::{Connection, ConnectionExt};
-#[cfg(feature = "gdb")] // 条件导入 GDB 相关
-use gdbstub::stub::{SingleThreadStopReason, run_blocking};
-#[cfg(feature = "gdb")] // 条件导入 GDB 相关
-use gdbstub::target::Target;
-#[cfg(feature = "gdb")] // 条件导入 GDB 相关
-use gdbstub::target::ext::breakpoints::WatchKind;
+
 pub use memory::{Memory, MemoryError};
-use nohash_hasher::{self, BuildNoHashHasher};
+#[cfg(feature = "gdb")] // 条件编译 GDB 模块
+pub use gdb::EmuGdbEventLoop;
+
 pub use state::State;
 pub use state::{Event, ExecMode, ExecState};
-use std::collections::HashSet;
 
-type NoHashHashSet<T> = HashSet<T, BuildNoHashHasher<T>>;
 /// 模拟器结构体
 pub struct Emulator {
     /// CPU状态（包含内存）
     state: State,
-    /// 调试器（可选）
-    debugger: bool,
     exec_state: ExecState,
     exec_mode: ExecMode,
     event: Event,
     event_list: RingBuffer<Event>,
-    breakpoints: NoHashHashSet<u64>,
-    watchpoints: NoHashHashSet<u64>,
+    #[cfg(feature = "gdb")] // 条件编译 GDB 相关
+    gdb_data: gdb::GdbData,
 }
 
-#[cfg(feature = "gdb")] // 条件编译 GDB 事件循环
-pub enum EmuGdbEventLoop {}
-
-#[cfg(feature = "gdb")] // 条件编译 GDB 事件循环实现
-impl run_blocking::BlockingEventLoop for EmuGdbEventLoop {
-    type Target = Emulator;
-
-    type Connection = Box<dyn ConnectionExt<Error = std::io::Error>>;
-
-    type StopReason = SingleThreadStopReason<u64>;
-
-    fn wait_for_stop_reason(
-        target: &mut Self::Target,
-        conn: &mut Self::Connection,
-    ) -> std::result::Result<
-        run_blocking::Event<Self::StopReason>,
-        run_blocking::WaitForStopReasonError<
-            <Self::Target as Target>::Error,
-            <Self::Connection as Connection>::Error,
-        >,
-    > {
-        let mode = target.get_exec_mode();
-        let mut cnt = match mode {
-            ExecMode::Step => 1,
-            ExecMode::Continue => usize::MAX,
-            ExecMode::RangeStep(start, end) => {
-                if target.get_state_ref().get_pc() >= end {
-                    return Ok(run_blocking::Event::TargetStopped(
-                        SingleThreadStopReason::Exited(0),
-                    ));
-                }
-                (end - start) as usize
-            }
-            _ => 1, // 默认单步执行
-        };
-        let mut delay_cycles = 0;
-        while target.get_exec_state() != ExecState::End {
-            if delay_cycles >= 1000 && conn.peek().is_ok() {
-                let byte = conn
-                    .read()
-                    .map_err(run_blocking::WaitForStopReasonError::Connection)?;
-                return Ok(run_blocking::Event::IncomingData(byte));
-            }
-
-            match target.step() {
-                Ok(_) => match target.event {
-                    Event::None => (),
-                    Event::Halted => {
-                        return Ok(run_blocking::Event::TargetStopped(
-                            SingleThreadStopReason::Exited(0),
-                        ));
-                    }
-                    Event::Break => {
-                        return Ok(run_blocking::Event::TargetStopped(
-                            SingleThreadStopReason::Terminated(Signal::SIGSTOP),
-                        ));
-                    }
-                    Event::WatchWrite(addr) => {
-                        return Ok(run_blocking::Event::TargetStopped(
-                            SingleThreadStopReason::Watch {
-                                tid: (),
-                                kind: WatchKind::Write,
-                                addr,
-                            },
-                        ));
-                    }
-                    Event::WatchRead(addr) => {
-                        return Ok(run_blocking::Event::TargetStopped(
-                            SingleThreadStopReason::Watch {
-                                tid: (),
-                                kind: WatchKind::Read,
-                                addr,
-                            },
-                        ));
-                    }
-                },
-                Err(e) => {
-                    let error_msg = format!("gdb调试过程中出现执行错误: {}", e);
-                    // 打印错误信息
-                    tracing::error!("{}", error_msg);
-                    tracing::error!("CPU状态:\n{}", target.get_state_ref());
-                    return Err(run_blocking::WaitForStopReasonError::Target(error_msg));
-                }
-            }
-            if mode != ExecMode::Continue {
-                cnt -= 1;
-                if cnt == 0 {
-                    return Ok(run_blocking::Event::TargetStopped(
-                        SingleThreadStopReason::DoneStep,
-                    ));
-                }
-            }
-            if delay_cycles >= 1000 {
-                delay_cycles = 0; // 重置延迟计数器
-            } else {
-                delay_cycles += 1;
-            }
-        }
-        Ok(run_blocking::Event::TargetStopped(
-            SingleThreadStopReason::DoneStep,
-        ))
-    }
-
-    fn on_interrupt(
-        _target: &mut Self::Target,
-    ) -> std::result::Result<Option<Self::StopReason>, <Self::Target as Target>::Error> {
-        Ok(Some(SingleThreadStopReason::Signal(Signal::SIGINT)))
-    }
-}
 
 impl Emulator {
     /// 创建新的模拟器实例
     pub fn new(memory_size: usize) -> Result<Self> {
         let state = State::new(memory_size)?;
+        let exec_mode = if cfg!(feature = "gdb") {
+            ExecMode::Continue // 如果启用了GDB，默认执行模式为连续执行
+        } else {
+            ExecMode::None // 否则为无执行模式
+        };
         Ok(Self {
             state,
-            debugger: false,
             exec_state: ExecState::Idle,
-            exec_mode: ExecMode::None,
+            exec_mode,
             event: Event::None,
             event_list: RingBuffer::new(const_values::EVENT_LIST_SIZE),
-            breakpoints: NoHashHashSet::default(),
-            watchpoints: NoHashHashSet::default(),
+            #[cfg(feature = "gdb")] // 条件编译 GDB 相关
+            gdb_data: gdb::GdbData::new(),
         })
     }
 
@@ -178,18 +62,6 @@ impl Emulator {
             .with_context(|| format!("无法从 '{}' 加载ELF文件", path))?;
 
         Ok(())
-    }
-
-    /// 启用调试模式
-    pub fn enable_debug(&mut self) -> Result<()> {
-        self.debugger = true;
-        self.exec_mode = ExecMode::Continue; // 设置执行模式为连续执行
-        Ok(())
-    }
-    
-    /// 检查是否启用调试模式
-    pub fn is_debug_enabled(&self) -> bool {
-        self.debugger
     }
 
     #[inline(always)]
@@ -217,7 +89,8 @@ impl Emulator {
             )
         })?;
         self.event = event.event;
-        if (self.event == Event::Halted) && self.debugger {
+        #[cfg(feature = "gdb")] // 条件编译 GDB 相关
+        if self.event == Event::Halted {
             self.exec_state = ExecState::End; // 结束执行状态
         }
         self.state.set_pc(pc + 4);
@@ -233,7 +106,8 @@ impl Emulator {
         self.step_internal()?;
 
         // 捕获除了None以外的event，放入事件列表
-        if self.debugger && self.event != Event::None {
+        #[cfg(feature = "gdb")] // 条件编译 GDB 相关
+        if self.event != Event::None {
             self.event_list.push_overwrite(self.event);
         }
 
@@ -252,7 +126,8 @@ impl Emulator {
             self.step_internal()?;
 
             // 捕获除了None以外的event，放入事件列表
-            if self.debugger && self.event != Event::None {
+            #[cfg(feature = "gdb")] // 条件编译 GDB 相关
+            if self.event != Event::None {
                 self.event_list.push_overwrite(self.event);
             }
 
