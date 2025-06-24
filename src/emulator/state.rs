@@ -1,7 +1,9 @@
 //! CPU状态管理
 
 use super::memory::{Memory, MemoryError};
+use crate::utils::disasm::RiscvDisassembler;
 use anyhow::Result;
+use std::fmt;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -14,6 +16,15 @@ pub enum StateError {
     Memory(#[from] MemoryError),
     #[error("指令错误: 无效的指令字节, pc={0:#x}")]
     InvalidInstructionBytes(u64),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExecMode {
+    #[default]
+    None, // 无执行模式
+    Step, // 单步执行
+    Continue, // 连续执行
+    RangeStep(u64, u64), // 范围单步执行
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -30,8 +41,6 @@ pub enum ExecState {
 pub enum Event {
     #[default]
     None,
-    IncomingData,
-    DoneStep,
     Halted,
     Break,
     WatchWrite(u64),
@@ -136,6 +145,123 @@ impl State {
     /// 设置CSR值
     pub fn set_csr(&mut self, csr: u16, value: u64) -> Result<()> {
         self.csrs.insert(csr, value);
+        Ok(())
+    }
+}
+
+/// RISC-V寄存器别名
+fn get_register_alias(reg: usize) -> &'static str {
+    match reg {
+        0 => "zero",   // Hard-wired zero
+        1 => "ra",     // Return address
+        2 => "sp",     // Stack pointer
+        3 => "gp",     // Global pointer
+        4 => "tp",     // Thread pointer
+        5 => "t0",     // Temporary
+        6 => "t1",     // Temporary
+        7 => "t2",     // Temporary
+        8 => "s0/fp",  // Saved register/frame pointer
+        9 => "s1",     // Saved register
+        10 => "a0",    // Function argument/return value
+        11 => "a1",    // Function argument/return value
+        12 => "a2",    // Function argument
+        13 => "a3",    // Function argument
+        14 => "a4",    // Function argument
+        15 => "a5",    // Function argument
+        16 => "a6",    // Function argument
+        17 => "a7",    // Function argument
+        18 => "s2",    // Saved register
+        19 => "s3",    // Saved register
+        20 => "s4",    // Saved register
+        21 => "s5",    // Saved register
+        22 => "s6",    // Saved register
+        23 => "s7",    // Saved register
+        24 => "s8",    // Saved register
+        25 => "s9",    // Saved register
+        26 => "s10",   // Saved register
+        27 => "s11",   // Saved register
+        28 => "t3",    // Temporary
+        29 => "t4",    // Temporary
+        30 => "t5",    // Temporary
+        31 => "t6",    // Temporary
+        _ => "unknown",
+    }
+}
+
+impl fmt::Display for State {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== CPU State ===")?;
+        writeln!(f, "PC: 0x{:016x}", self.pc)?;
+        writeln!(f)?;
+
+        // 打印寄存器
+        writeln!(f, "Registers:")?;
+        for i in 0..32 {
+            let value = if i == 0 { 0 } else { self.registers[i] };
+            let alias = get_register_alias(i);
+            writeln!(f, "  x{:2}({:>6}): 0x{:016x}", i, alias, value)?;
+        }
+        writeln!(f)?;
+
+        // 打印PC附近的内存和反汇编
+        writeln!(f, "Memory around PC:")?;
+        let disasm = match RiscvDisassembler::new() {
+            Ok(d) => d,
+            Err(_) => {
+                writeln!(f, "  Failed to create disassembler")?;
+                return Ok(());
+            }
+        };
+
+        // 显示PC前后各4条指令（共9条）
+        let start_offset = 4 * 4; // 4条指令 * 4字节
+        let instruction_count = 9;
+        let start_addr = self.pc.saturating_sub(start_offset);
+
+        for i in 0..instruction_count {
+            let addr = start_addr + (i * 4) as u64;
+            
+            // 检查是否越界
+            match self.read_memory(addr, 4) {
+                Ok(bytes) => {
+                    if bytes.len() == 4 {
+                        let instruction = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+                        
+                        // 标记当前PC
+                        let marker = if addr == self.pc { " <-- PC" } else { "" };
+                        
+                        // 反汇编指令
+                        match disasm.disasm_instruction(instruction, addr) {
+                            Ok(disasm_text) => {
+                                writeln!(f, "  0x{:016x}: {:08x}    {}{}", 
+                                        addr, instruction, disasm_text, marker)?;
+                            }
+                            Err(_) => {
+                                writeln!(f, "  0x{:016x}: {:08x}    <invalid>{}", 
+                                        addr, instruction, marker)?;
+                            }
+                        }
+                    } else {
+                        writeln!(f, "  0x{:016x}: <partial read>", addr)?;
+                    }
+                }
+                Err(_) => {
+                    writeln!(f, "  0x{:016x}: <memory error>", addr)?;
+                }
+            }
+        }
+
+        // 打印CSR寄存器（如果有的话）
+        if !self.csrs.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "CSR Registers:")?;
+            let mut csr_pairs: Vec<_> = self.csrs.iter().collect();
+            csr_pairs.sort_by_key(|&(k, _)| k);
+            for (csr, value) in csr_pairs {
+                writeln!(f, "  CSR 0x{:03x}: 0x{:016x}", csr, value)?;
+            }
+        }
+
         Ok(())
     }
 }

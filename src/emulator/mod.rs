@@ -4,7 +4,7 @@ mod exception;
 pub mod execute;
 pub mod gdb;
 mod memory;
-mod state;
+pub mod state;
 
 use crate::utils::disasm_riscv64_instruction;
 use crate::{const_values, utils::ringbuf::RingBuffer};
@@ -18,7 +18,7 @@ use gdbstub::target::Target;
 pub use memory::{Memory, MemoryError};
 use nohash_hasher::{self, BuildNoHashHasher};
 pub use state::State;
-pub use state::{Event, ExecState};
+pub use state::{Event, ExecState, ExecMode};
 use std::collections::HashSet;
 
 type NoHashHashSet<T> = HashSet<T, BuildNoHashHasher<T>>;
@@ -29,6 +29,7 @@ pub struct Emulator {
     /// 调试器（可选）
     debugger: bool,
     exec_state: ExecState,
+    exec_mode: ExecMode,
     event: Event,
     event_list: RingBuffer<Event>,
     breakpoints: NoHashHashSet<u64>,
@@ -54,7 +55,39 @@ impl run_blocking::BlockingEventLoop for EmuGdbEventLoop {
             <Self::Connection as Connection>::Error,
         >,
     > {
-        todo!()
+        let mode = target.get_exec_mode();
+        let mut cnt = match mode {
+            ExecMode::Step => 1,
+            ExecMode::Continue => usize::MAX,
+            ExecMode::RangeStep(start, end) => {
+                if target.get_state_ref().get_pc() >= end {
+                    return Ok(run_blocking::Event::TargetStopped(
+                        SingleThreadStopReason::Exited(0),
+                    ));
+                }
+                (end - start) as usize
+            }
+            _ => 1, // 默认单步执行
+        };
+        while target.get_exec_state() != ExecState::End {
+            match target.step() {
+                Ok(_) => todo!(),
+                Err(e) => {
+                    let error_msg = format!("gdb调试过程中出现执行错误: {}", e.to_string());
+                    // 打印错误信息
+                    tracing::error!("{}", error_msg);
+                    tracing::error!("CPU状态:\n{}", target.get_state_ref());
+                    return Err(run_blocking::WaitForStopReasonError::Target(error_msg));
+                },
+            }
+            if mode != ExecMode::Continue {
+                cnt -= 1;
+                if cnt == 0 {
+                    break;
+                }
+            }  
+        }
+        Ok(run_blocking::Event::TargetStopped(SingleThreadStopReason::Exited(0)))
     }
 
     fn on_interrupt(
@@ -72,6 +105,7 @@ impl Emulator {
             state,
             debugger: false,
             exec_state: ExecState::Idle,
+            exec_mode: ExecMode::None,
             event: Event::None,
             event_list: RingBuffer::new(const_values::EVENT_LIST_SIZE),
             breakpoints: NoHashHashSet::default(),
@@ -93,6 +127,7 @@ impl Emulator {
     /// 启用调试模式
     pub fn enable_debug(&mut self) -> Result<()> {
         self.debugger = true;
+        self.exec_mode = ExecMode::Continue; // 设置执行模式为连续执行
         Ok(())
     }
 
@@ -115,8 +150,8 @@ impl Emulator {
             let instruction_msg =
                 disasm_riscv64_instruction(instruction, pc).unwrap_or("未知指令".to_string());
             format!(
-                "无法执行PC {:#010x} 处的指令 {:#010x} ({})",
-                pc, instruction, instruction_msg
+                "无法执行PC {:#010x} 处的指令 {:#010x} ({}), cpu状态:\n{}",
+                pc, instruction, instruction_msg, self.state
             )
         })?;
         self.event = event.event;
@@ -170,16 +205,24 @@ impl Emulator {
     }
 
     /// 获取处理器状态引用
+    #[inline(always)]
     pub fn get_state(&self) -> State {
         self.state.clone()
     }
 
+    #[inline(always)]
     pub fn get_state_ref(&self) -> &State {
         &self.state
     }
 
+    #[inline(always)]
     pub fn get_exec_state(&self) -> ExecState {
         self.exec_state
+    }
+
+    #[inline(always)]
+    pub fn get_exec_mode(&self) -> ExecMode {
+        self.exec_mode
     }
 
     // 返回事件列表

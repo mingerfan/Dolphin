@@ -6,7 +6,7 @@ set(CMAKE_C_COMPILER riscv64-linux-gnu-gcc)
 set(CMAKE_ASM_COMPILER riscv64-linux-gnu-gcc)
 
 # Common compiler flags
-set(COMMON_FLAGS "-march=rv64gc -mabi=lp64d -static -nostdlib -nostartfiles")
+set(COMMON_FLAGS "-march=rv64ima -mabi=lp64 -static -nostdlib -nostartfiles")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS}")
 set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} ${COMMON_FLAGS}")
 

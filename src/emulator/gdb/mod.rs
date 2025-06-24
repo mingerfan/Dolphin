@@ -1,8 +1,11 @@
 mod breakpoints;
 
-use crate::emulator::Emulator;
+use crate::emulator::{Emulator, ExecMode};
 use anyhow::Result;
-use gdbstub::target::ext::base::singlethread::SingleThreadBase;
+use gdbstub::target::ext::base::single_register_access::SingleRegisterAccess;
+use gdbstub::target::ext::base::singlethread::{
+    SingleThreadBase, SingleThreadRangeStepping, SingleThreadResume, SingleThreadSingleStep,
+};
 use gdbstub::target::{self, Target};
 use gdbstub_arch::riscv::reg::id::RiscvRegId;
 use std::net::{TcpListener, TcpStream};
@@ -19,7 +22,7 @@ pub fn wait_for_tcp(port: u16) -> Result<TcpStream> {
 
 impl Target for Emulator {
     type Arch = gdbstub_arch::riscv::Riscv64;
-    type Error = &'static str;
+    type Error = String;
 
     #[inline(always)]
     fn base_ops(&mut self) -> target::ext::base::BaseOps<'_, Self::Arch, Self::Error> {
@@ -32,7 +35,6 @@ impl Target for Emulator {
     ) -> Option<target::ext::breakpoints::BreakpointsOps<'_, Self>> {
         Some(self)
     }
-
 }
 
 impl SingleThreadBase for Emulator {
@@ -84,9 +86,16 @@ impl SingleThreadBase for Emulator {
         }
         Ok(())
     }
+
+    #[inline(always)]
+    fn support_resume(
+        &mut self,
+    ) -> Option<target::ext::base::singlethread::SingleThreadResumeOps<'_, Self>> {
+        Some(self)
+    }
 }
 
-impl target::ext::base::single_register_access::SingleRegisterAccess<()> for Emulator {
+impl SingleRegisterAccess<()> for Emulator {
     fn read_register(
         &mut self,
         _tid: (),
@@ -140,5 +149,59 @@ impl target::ext::base::single_register_access::SingleRegisterAccess<()> for Emu
                 Err(target::TargetError::NonFatal)
             }
         }
+    }
+}
+
+impl SingleThreadSingleStep for Emulator {
+    fn step(
+        &mut self,
+        signal: Option<gdbstub::common::Signal>,
+    ) -> std::result::Result<(), Self::Error> {
+        if signal.is_some() {
+            tracing::error!("带信号的single step不受支持");
+            return Err("带信号的single step不受支持".to_string());
+        }
+        self.exec_mode = ExecMode::Step;
+        Ok(())
+    }
+}
+
+impl SingleThreadRangeStepping for Emulator {
+    fn resume_range_step(
+        &mut self,
+        start: <Self::Arch as gdbstub::arch::Arch>::Usize,
+        end: <Self::Arch as gdbstub::arch::Arch>::Usize,
+    ) -> std::result::Result<(), Self::Error> {
+        self.exec_mode = ExecMode::RangeStep(start, end);
+        Ok(())
+    }
+}
+
+impl SingleThreadResume for Emulator {
+    fn resume(
+        &mut self,
+        signal: Option<gdbstub::common::Signal>,
+    ) -> std::result::Result<(), Self::Error> {
+        if signal.is_some() {
+            tracing::error!("带信号的resume不受支持");
+            return Err("带信号的resume不受支持".to_string());
+        }
+
+        self.exec_mode = ExecMode::Continue;
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn support_single_step(
+        &mut self,
+    ) -> Option<target::ext::base::singlethread::SingleThreadSingleStepOps<'_, Self>> {
+        Some(self)
+    }
+
+    #[inline(always)]
+    fn support_range_step(
+        &mut self,
+    ) -> Option<target::ext::base::singlethread::SingleThreadRangeSteppingOps<'_, Self>> {
+        Some(self)
     }
 }
