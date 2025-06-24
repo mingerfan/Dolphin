@@ -53,7 +53,7 @@ pub fn build_emu_run_blocking(args: Args) -> Result<()> {
         match gdb_conn.run_blocking::<EmuGdbEventLoop>(&mut emu) {
             Ok(_) => info!("GDB调试会话结束"),
             Err(e) => {
-                tracing::error!("GDB调试会话出错: {:?}", e);
+                tracing::error!("GDB调试会话出错");
                 return Err(e.into());
             }
         };

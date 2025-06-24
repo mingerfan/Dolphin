@@ -15,10 +15,11 @@ use gdbstub::common::Signal;
 use gdbstub::conn::{Connection, ConnectionExt};
 use gdbstub::stub::{SingleThreadStopReason, run_blocking};
 use gdbstub::target::Target;
+use gdbstub::target::ext::breakpoints::WatchKind;
 pub use memory::{Memory, MemoryError};
 use nohash_hasher::{self, BuildNoHashHasher};
 pub use state::State;
-pub use state::{Event, ExecState, ExecMode};
+pub use state::{Event, ExecMode, ExecState};
 use std::collections::HashSet;
 
 type NoHashHashSet<T> = HashSet<T, BuildNoHashHasher<T>>;
@@ -69,25 +70,72 @@ impl run_blocking::BlockingEventLoop for EmuGdbEventLoop {
             }
             _ => 1, // 默认单步执行
         };
+        let mut delay_cycles = 0;
         while target.get_exec_state() != ExecState::End {
+            if delay_cycles >= 1000 && conn.peek().is_ok() {
+                let byte = conn
+                    .read()
+                    .map_err(run_blocking::WaitForStopReasonError::Connection)?;
+                return Ok(run_blocking::Event::IncomingData(byte));
+            }
+
             match target.step() {
-                Ok(_) => todo!(),
+                Ok(_) => match target.event {
+                    Event::None => (),
+                    Event::Halted => {
+                        return Ok(run_blocking::Event::TargetStopped(
+                            SingleThreadStopReason::Exited(0),
+                        ));
+                    }
+                    Event::Break => {
+                        return Ok(run_blocking::Event::TargetStopped(
+                            SingleThreadStopReason::Terminated(Signal::SIGSTOP),
+                        ));
+                    }
+                    Event::WatchWrite(addr) => {
+                        return Ok(run_blocking::Event::TargetStopped(
+                            SingleThreadStopReason::Watch {
+                                tid: (),
+                                kind: WatchKind::Write,
+                                addr,
+                            },
+                        ));
+                    }
+                    Event::WatchRead(addr) => {
+                        return Ok(run_blocking::Event::TargetStopped(
+                            SingleThreadStopReason::Watch {
+                                tid: (),
+                                kind: WatchKind::Read,
+                                addr,
+                            },
+                        ));
+                    }
+                },
                 Err(e) => {
-                    let error_msg = format!("gdb调试过程中出现执行错误: {}", e.to_string());
+                    let error_msg = format!("gdb调试过程中出现执行错误: {}", e);
                     // 打印错误信息
                     tracing::error!("{}", error_msg);
                     tracing::error!("CPU状态:\n{}", target.get_state_ref());
                     return Err(run_blocking::WaitForStopReasonError::Target(error_msg));
-                },
+                }
             }
             if mode != ExecMode::Continue {
                 cnt -= 1;
                 if cnt == 0 {
-                    break;
+                    return Ok(run_blocking::Event::TargetStopped(
+                        SingleThreadStopReason::DoneStep,
+                    ));
                 }
-            }  
+            }
+            if delay_cycles >= 1000 {
+                delay_cycles = 0; // 重置延迟计数器
+            } else {
+                delay_cycles += 1;
+            }
         }
-        Ok(run_blocking::Event::TargetStopped(SingleThreadStopReason::Exited(0)))
+        Ok(run_blocking::Event::TargetStopped(
+            SingleThreadStopReason::DoneStep,
+        ))
     }
 
     fn on_interrupt(
@@ -142,6 +190,7 @@ impl Emulator {
                 .with_context(|| format!("无法从PC {:#x} 处读取指令", pc))?;
             (pc, instruction)
         };
+        
 
         // 执行指令
         let mut executor = execute::RV64I::new(instruction);
