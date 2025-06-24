@@ -9,6 +9,9 @@ use clap::Parser;
 use emulator::Emulator;
 use tracing::info;
 
+#[cfg(feature = "tracer")]
+use emulator::tracer::TracerArgs;
+
 // 仅在启用 GDB feature 时导入相关模块
 #[cfg(feature = "gdb")]
 use {
@@ -31,6 +34,11 @@ pub struct Args {
     /// 内存大小 (MB)
     #[arg(short, long, default_value = "128")]
     pub memory: usize,
+
+    /// 追踪器参数
+    #[cfg(feature = "tracer")]
+    #[command(flatten)]
+    pub tracer: TracerArgs,
 }
 
 pub fn build_emu_run_blocking(args: Args) -> Result<()> {
@@ -41,6 +49,10 @@ pub fn build_emu_run_blocking(args: Args) -> Result<()> {
         info!(path = %elf_path, "加载ELF文件");
         emu.load_elf(&elf_path)?;
     }
+
+    // 初始化全局追踪器
+    #[cfg(feature = "tracer")]
+    emulator::tracer::init_global_tracer(args.tracer);
 
     #[cfg(feature = "gdb")] // 条件编译 GDB 支持
     {
@@ -65,6 +77,18 @@ pub fn build_emu_run_blocking(args: Args) -> Result<()> {
             // 执行模拟器步骤
             emu.steps(usize::MAX)?;
         }
+    }
+
+    #[cfg(feature = "tracer")]
+    {
+        // 打印追踪日志
+        use crate::emulator::tracer::destroy_global_tracer;
+        if let Some(log) = emulator::tracer::global_get_log() {
+            info!("追踪日志:\n{}", log);
+        } else {
+            info!("没有追踪日志");
+        }
+        destroy_global_tracer();
     }
 
     Ok(())

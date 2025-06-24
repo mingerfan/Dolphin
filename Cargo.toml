@@ -34,3 +34,4 @@ capstone = "0.12"
 
 [features]
 gdb = ["gdbstub", "gdbstub_arch"]  # 新增 GDB 特性
+tracer = []

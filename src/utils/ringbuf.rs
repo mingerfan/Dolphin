@@ -8,6 +8,7 @@ pub enum RingBufferError {
     Empty,
 }
 
+#[derive(Debug, Clone)]
 pub struct RingBuffer<T> {
     buf: Vec<T>,
     read: usize,

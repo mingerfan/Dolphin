@@ -2,10 +2,15 @@
 
 mod exception;
 pub mod execute;
-#[cfg(feature = "gdb")] // 条件编译 GDB 模块
-pub mod gdb;
-mod memory;
 pub mod state;
+
+#[cfg(feature = "gdb")] // 条件编译 GDB 模块
+mod gdb;
+#[cfg(feature = "tracer")] // 条件编译追踪器模块
+pub mod tracer;
+
+mod memory;
+
 
 use crate::utils::disasm_riscv64_instruction;
 use crate::{const_values, utils::ringbuf::RingBuffer};
@@ -93,6 +98,9 @@ impl Emulator {
         if self.event == Event::Halted {
             self.exec_state = ExecState::End; // 结束执行状态
         }
+        #[cfg(feature = "tracer")] // 条件编译追踪器相关
+        tracer::global_trace(self);
+
         self.state.set_pc(pc + 4);
         Ok(())
     }
