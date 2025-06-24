@@ -1,9 +1,9 @@
 [package]
-name = "simulator"
+name = "emulator"
 version = "0.1.0"
 edition = "2024"
 authors = ["mingerfan"]
-description = "A RISC-V simulator implemented in Rust"
+description = "A RISC-V emulator implemented in Rust"
 
 [dependencies]
 # 错误处理

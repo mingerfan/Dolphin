@@ -148,6 +148,10 @@ impl Emulator {
             if self.debugger && self.event != Event::None {
                 self.event_list.push_overwrite(self.event);
             }
+
+            if self.exec_state == ExecState::End {
+                break;
+            }
         }
         self.exec_state = ExecState::Idle;
         Ok(())
@@ -160,6 +164,10 @@ impl Emulator {
 
     pub fn get_state_ref(&self) -> &State {
         &self.state
+    }
+
+    pub fn get_exec_state(&self) -> ExecState {
+        self.exec_state
     }
 
     // 返回事件列表

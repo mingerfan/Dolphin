@@ -45,7 +45,7 @@ impl RiscvDisassembler {
         let op_str = insn.op_str().unwrap_or("");
         
         if op_str.is_empty() {
-            Ok(format!("{}", mnemonic))
+            Ok(mnemonic.to_string())
         } else {
             Ok(format!("{} {}", mnemonic, op_str))
         }
@@ -70,7 +70,7 @@ impl RiscvDisassembler {
             let op_str = insn.op_str().unwrap_or("");
             
             let disasm_text = if op_str.is_empty() {
-                format!("{}", mnemonic)
+                mnemonic.to_string()
             } else {
                 format!("{} {}", mnemonic, op_str)
             };
@@ -105,7 +105,7 @@ impl RiscvDisassembler {
         let op_str = insn.op_str().unwrap_or("");
         
         let disasm_text = if op_str.is_empty() {
-            format!("{}", mnemonic)
+            mnemonic.to_string()
         } else {
             format!("{} {}", mnemonic, op_str)
         };
