@@ -48,6 +48,7 @@ impl Memory {
     }
 
     /// 读取内存
+    #[inline(always)]
     pub fn read(&self, addr: u64, size: usize) -> Result<Vec<u8>, MemoryError> {
         let real_addr = self.translate_address(addr, size, 1)?;
         let start = real_addr as usize;
@@ -55,6 +56,7 @@ impl Memory {
     }
 
     /// 写入内存
+    #[inline(always)]
     pub fn write(&mut self, addr: u64, data: &[u8]) -> Result<(), MemoryError> {
         let real_addr = self.translate_address(addr, data.len(), 1)?;
         let start = real_addr as usize;
@@ -63,12 +65,14 @@ impl Memory {
     }
 
     /// 读取字节
+    #[inline(always)]
     pub fn read_byte(&self, addr: u64) -> Result<u8, MemoryError> {
         let real_addr = self.translate_address(addr, 1, 1)?;
         Ok(self.data[real_addr as usize])
     }
 
     /// 读取半字
+    #[inline(always)]
     pub fn read_halfword(&self, addr: u64) -> Result<u16, MemoryError> {
         let real_addr = self.translate_address(addr, 2, 2)?;
         let bytes = self.data[real_addr as usize..(real_addr as usize + 2)].to_vec();
@@ -77,6 +81,7 @@ impl Memory {
     }
 
     /// 读取字
+    #[inline(always)]
     pub fn read_word(&self, addr: u64) -> Result<u32, MemoryError> {
         let real_addr = self.translate_address(addr, 4, 4)?;
         let bytes = self.data[real_addr as usize..(real_addr as usize + 4)].to_vec();
@@ -85,6 +90,7 @@ impl Memory {
     }
 
     /// 读取双字
+    #[inline(always)]
     pub fn read_doubleword(&self, addr: u64) -> Result<u64, MemoryError> {
         let real_addr = self.translate_address(addr, 8, 8)?;
         let bytes = self.data[real_addr as usize..(real_addr as usize + 8)].to_vec();
@@ -93,11 +99,13 @@ impl Memory {
     }
 
     /// 写入字节
+    #[inline(always)]
     pub fn write_byte(&mut self, addr: u64, value: u8) -> Result<(), MemoryError> {
         self.write(addr, &[value])
     }
 
     /// 写入半字
+    #[inline(always)]
     pub fn write_halfword(&mut self, addr: u64, value: u16) -> Result<(), MemoryError> {
         let real_addr = self.translate_address(addr, 2, 2)?;
         let value_bytes = value.to_le_bytes();
@@ -106,6 +114,7 @@ impl Memory {
     }
 
     /// 写入字
+    #[inline(always)]
     pub fn write_word(&mut self, addr: u64, value: u32) -> Result<(), MemoryError> {
         let real_addr = self.translate_address(addr, 4, 4)?;
         let value_bytes = value.to_le_bytes();
@@ -114,6 +123,7 @@ impl Memory {
     }
 
     /// 写入双字
+    #[inline(always)]
     pub fn write_doubleword(&mut self, addr: u64, value: u64) -> Result<(), MemoryError> {
         let real_addr = self.translate_address(addr, 8, 8)?;
         let value_bytes = value.to_le_bytes();

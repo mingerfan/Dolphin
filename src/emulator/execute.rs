@@ -1,6 +1,6 @@
 //! 指令执行模块
 
-use crate::emulator::State;
+use crate::emulator::state::{self, State};
 use thiserror::Error;
 
 /// 所有可能的执行错误
@@ -14,10 +14,14 @@ pub enum ExecuteError {
     MemoryAccessError(u64),
 }
 
+pub struct ExecMsg {
+    pub event: state::Event,
+}
+
 /// 指令执行trait
 pub trait Execute {
     /// 执行指令
-    fn execute(&mut self, state: &mut State) -> anyhow::Result<()>;
+    fn execute(&mut self, state: &mut State) -> anyhow::Result<ExecMsg>;
 }
 
 /// RV64I基本指令集
@@ -42,7 +46,7 @@ impl RV64I {
 }
 
 impl Execute for RV64I {
-    fn execute(&mut self, state: &mut State) -> anyhow::Result<()> {
+    fn execute(&mut self, state: &mut State) -> anyhow::Result<ExecMsg> {
         let (opcode, rd, rs1, rs2, funct3) = self.decode();
 
         match opcode {

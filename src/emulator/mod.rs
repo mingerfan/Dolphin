@@ -2,22 +2,23 @@
 
 mod exception;
 pub mod execute;
-mod gdb;
+pub mod gdb;
 mod memory;
 mod state;
 
-use anyhow::{Context, Ok, Result};
-
 use crate::utils::disasm_riscv64_instruction;
 use crate::{const_values, utils::ringbuf::RingBuffer};
+use anyhow::{Context, Result};
 pub use exception::Exception;
 pub use execute::Execute;
+use gdbstub::common::Signal;
 use gdbstub::conn::{Connection, ConnectionExt};
 use gdbstub::stub::{SingleThreadStopReason, run_blocking};
 use gdbstub::target::Target;
 pub use memory::{Memory, MemoryError};
 use nohash_hasher::{self, BuildNoHashHasher};
 pub use state::State;
+pub use state::{Event, ExecState};
 use std::collections::HashSet;
 
 type NoHashHashSet<T> = HashSet<T, BuildNoHashHasher<T>>;
@@ -34,7 +35,7 @@ pub struct Emulator {
     watchpoints: NoHashHashSet<u64>,
 }
 
-enum EmuGdbEventLoop {}
+pub enum EmuGdbEventLoop {}
 
 impl run_blocking::BlockingEventLoop for EmuGdbEventLoop {
     type Target = Emulator;
@@ -57,31 +58,10 @@ impl run_blocking::BlockingEventLoop for EmuGdbEventLoop {
     }
 
     fn on_interrupt(
-        target: &mut Self::Target,
+        _target: &mut Self::Target,
     ) -> std::result::Result<Option<Self::StopReason>, <Self::Target as Target>::Error> {
-        todo!()
+        Ok(Some(SingleThreadStopReason::Signal(Signal::SIGINT)))
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[non_exhaustive]
-pub enum ExecState {
-    #[default]
-    Idle,
-    Running,
-    End,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Event {
-    #[default]
-    None,
-    IncomingData,
-    DoneStep,
-    Halted,
-    Break,
-    WatchWrite(u64),
-    WatchRead(u64),
 }
 
 impl Emulator {
@@ -116,33 +96,63 @@ impl Emulator {
         Ok(())
     }
 
+    #[inline(always)]
+    fn step_internal(&mut self) -> Result<()> {
+        // 获取PC和指令
+        let (pc, instruction) = {
+            let pc = self.state.get_pc();
+            let instruction = self
+                .state
+                .fetch_instruction(pc)
+                .with_context(|| format!("无法从PC {:#x} 处读取指令", pc))?;
+            (pc, instruction)
+        };
+
+        // 执行指令
+        let mut executor = execute::RV64I::new(instruction);
+
+        let event = executor.execute(&mut self.state).with_context(|| {
+            let instruction_msg =
+                disasm_riscv64_instruction(instruction, pc).unwrap_or("未知指令".to_string());
+            format!(
+                "无法执行PC {:#010x} 处的指令 {:#010x} ({})",
+                pc, instruction, instruction_msg
+            )
+        })?;
+        self.event = event.event;
+        if (self.event == Event::Halted) && self.debugger {
+            self.exec_state = ExecState::End; // 结束执行状态
+        }
+        self.state.set_pc(pc + 4);
+        Ok(())
+    }
+
+    /// 执行单步指令
+    #[inline(always)]
+    pub fn step(&mut self) -> Result<()> {
+        self.exec_state = ExecState::Running;
+        self.event = Event::None; // 重置事件
+
+        self.step_internal()?;
+
+        // 捕获除了None以外的event，放入事件列表
+        if self.debugger && self.event != Event::None {
+            self.event_list.push_overwrite(self.event);
+        }
+
+        if self.exec_state != ExecState::End {
+            self.exec_state = ExecState::Idle;
+        }
+        Ok(())
+    }
+
     /// 运行模拟器
-    pub fn step(&mut self, n: usize) -> Result<()> {
+    pub fn steps(&mut self, n: usize) -> Result<()> {
         self.exec_state = ExecState::Running;
         for _ in 0..n {
             self.event = Event::None; // 重置事件
-            // 获取PC和指令
-            let (pc, instruction) = {
-                let pc = self.state.get_pc();
-                let instruction = self
-                    .state
-                    .fetch_instruction(pc)
-                    .with_context(|| format!("无法从PC {:#x} 处读取指令", pc))?;
-                (pc, instruction)
-            };
 
-            // 执行指令
-            let mut executor = execute::RV64I::new(instruction);
-
-            executor.execute(&mut self.state).with_context(|| {
-                let instruction_msg =
-                    disasm_riscv64_instruction(instruction, pc).unwrap_or("未知指令".to_string());
-                format!(
-                    "无法执行PC {:#010x} 处的指令 {:#010x} ({})",
-                    pc, instruction, instruction_msg
-                )
-            })?;
-            self.state.set_pc(pc + 4);
+            self.step_internal()?;
 
             // 捕获除了None以外的event，放入事件列表
             if self.debugger && self.event != Event::None {
@@ -153,7 +163,9 @@ impl Emulator {
                 break;
             }
         }
-        self.exec_state = ExecState::Idle;
+        if self.exec_state != ExecState::End {
+            self.exec_state = ExecState::Idle;
+        }
         Ok(())
     }
 

@@ -16,6 +16,28 @@ pub enum StateError {
     InvalidInstructionBytes(u64),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum ExecState {
+    #[default]
+    Idle,
+    Running,
+    End,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum Event {
+    #[default]
+    None,
+    IncomingData,
+    DoneStep,
+    Halted,
+    Break,
+    WatchWrite(u64),
+    WatchRead(u64),
+}
+
 /// CPU状态
 #[derive(Debug, Clone)]
 pub struct State {
@@ -41,16 +63,19 @@ impl State {
     }
 
     /// 读取内存
+    #[inline(always)]
     pub fn read_memory(&self, addr: u64, size: usize) -> Result<Vec<u8>> {
         Ok(self.memory.read(addr, size)?)
     }
 
     /// 写入内存
+    #[inline(always)]
     pub fn write_memory(&mut self, addr: u64, data: &[u8]) -> Result<()> {
         Ok(self.memory.write(addr, data)?)
     }
 
     /// 取指令
+    #[inline(always)]
     pub fn fetch_instruction(&self, pc: u64) -> Result<u32> {
         let bytes = self
             .read_memory(pc, 4)?;
@@ -89,11 +114,13 @@ impl State {
     }
 
     /// 获取PC值
+    #[inline(always)]
     pub fn get_pc(&self) -> u64 {
         self.pc
     }
 
     /// 设置PC值
+    #[inline(always)]
     pub fn set_pc(&mut self, value: u64) {
         self.pc = value;
     }
