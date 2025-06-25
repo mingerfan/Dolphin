@@ -31,6 +31,8 @@ nohash-hasher = "0.2.0"
 
 # 反汇编支持
 capstone = "0.12"
+rv64emu = "0.1.1"
+hashlink = "0.10.0"
 
 [features]
 gdb = ["gdbstub", "gdbstub_arch"]  # 新增 GDB 特性

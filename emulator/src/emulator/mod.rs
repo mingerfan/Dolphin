@@ -5,7 +5,7 @@ pub mod execute;
 pub mod state;
 
 #[cfg(feature = "gdb")] // 条件编译 GDB 模块
-mod gdb;
+pub mod gdb;
 #[cfg(feature = "tracer")] // 条件编译追踪器模块
 pub mod tracer;
 

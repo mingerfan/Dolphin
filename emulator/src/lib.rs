@@ -3,6 +3,7 @@ pub mod const_values;
 pub mod emulator;
 pub mod system;
 pub mod utils;
+mod emu_ref;
 
 use anyhow::Result;
 use clap::Parser;
