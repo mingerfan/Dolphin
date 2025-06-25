@@ -63,26 +63,90 @@ task("disasm")
         description = "Disassemble binaries"
     }
 
--- 自定义任务: run
 
-task("run")
+-- 批量测试任务
+task("test_all")
+    on_run(function()
+        import("core.project.task")
+        local results = {}
+        local targets = {"hello", "add", "loop"}
+        
+        for _, name in ipairs(targets) do
+            print("Testing target:", name)
+            local entry = {name = name}
+            
+            -- 构建阶段
+            try {
+                function()
+                    task.run("build", {target = name})
+                    entry.build_ok = true
+                end,
+                catch {
+                    function(errors)
+                        entry.build_ok = false
+                        entry.build_err = tostring(errors)
+                    end
+                }
+            }
+            
+            -- 运行阶段(如果构建成功)
+            if entry.build_ok then
+                try {
+                    function()
+                        task.run("test", {target = name})
+                        entry.run_ok = true
+                    end,
+                    catch {
+                        function(errors)
+                            entry.run_ok = false
+                            entry.run_err = tostring(errors)
+                        end
+                    }
+                }
+            end
+            
+            table.insert(results, entry)
+        end
+        
+        -- 输出测试报告
+        print("\nTest Results:")
+        for _, r in ipairs(results) do
+            print(string.format("%-8s: build %s, run %s",
+                r.name,
+                r.build_ok and "OK" or "FAIL",
+                r.run_ok and "OK" or r.build_ok and "FAIL" or "SKIP"
+            ))
+            if not r.build_ok then
+                print("  Build Error:", r.build_err)
+            elseif not r.run_ok then
+                print("  Run Error:", r.run_err)
+            end
+        end
+    end)
+    set_menu {
+        usage = "xmake test_all",
+        description = "Run all tests with error handling"
+    }
+
+task("test_internal")
     local emu_dir = "../../emulator"
     local cur_dir = os.curdir()
     
-    on_run(function(target)
+    on_run(function(target, gdb, tracer)
         import("core.base.option")
         -- os.setenv("CARGO_TERM_QUIET", "true")
         os.setenv("RUSTFLAGS", "-Awarnings")
         local binary = path.join("bin", target or "hello")
+        print("Running binary:", binary)
         binary = path.join(cur_dir, binary)
         if os.isfile(binary) then
             os.cd(emu_dir)
             -- 构建features参数
             local features = {}
-            if option.get("gdb") then
+            if gdb then
                 table.insert(features, "gdb")
             end
-            if option.get("gdb") then
+            if tracer then
                 table.insert(features, "tracer")
             end
             
@@ -97,12 +161,24 @@ task("run")
             raise("Binary not found: " .. binary)
         end
     end)
+
+task("test")
+    on_run(function()
+        import("core.base.option")
+        import("core.base.task")
+        local target = option.get("target") or "hello"
+        local gdb = option.get("gdb")
+        local tracer = option.get("tracer")
+        print("Running test for target:", target, "GDB:", gdb, "Tracer:", tracer)
+        task.run("test_internal", {}, target, gdb, tracer)
+    end)
+
     set_menu {
-        usage = "xmake [--gdb] [--tracer] run [target]",
+        usage = "xmake test [--gdb] [--tracer] [--target <target>]",
         description = "Run binary in emulator",
         options = {
             {'g', "gdb", "k", nil, "Enable GDB support"},
             {'tr', "tracer", "k", nil, "Enable execution tracer"},
-            {'t', "target", "kv", nil, "Target to run (hello/add/loop)"}
+            {nil, "target", "v", nil, "Target to run (hello/add/loop)"}
         }
     }
