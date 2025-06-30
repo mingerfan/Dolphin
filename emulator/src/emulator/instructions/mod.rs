@@ -74,7 +74,7 @@ impl InstDecoder {
             cache,
             instructions_set,
             compressed_instructions,
-            config: args.clone(),
+            config: *args,
             opcode_map,
         }
     }

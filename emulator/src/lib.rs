@@ -52,7 +52,7 @@ pub fn build_emu_run_blocking(args: Args) -> Result<()> {
 
     if let Some(elf_path) = &args.elf {
         info!(path = %elf_path, "加载ELF文件");
-        emu.load_elf(&elf_path)?;
+        emu.load_elf(elf_path)?;
     }
 
     // 初始化全局追踪器

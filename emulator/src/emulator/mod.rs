@@ -1,7 +1,6 @@
 //! 模拟器核心模块
 
 mod exception;
-pub mod execute;
 mod instructions;
 pub mod state;
 
@@ -17,7 +16,6 @@ use crate::utils::disasm_riscv64_instruction;
 use crate::{const_values, utils::ringbuf::RingBuffer};
 use anyhow::{Context, Result};
 pub use exception::Exception;
-pub use execute::Execute;
 
 #[cfg(feature = "gdb")] // 条件编译 GDB 模块
 pub use gdb::EmuGdbEventLoop;
