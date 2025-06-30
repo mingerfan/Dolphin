@@ -9,6 +9,7 @@ use anyhow::Result;
 use clap::Parser;
 use emulator::Emulator;
 use tracing::info;
+use emulator::InstDecoderArgs;
 
 #[cfg(feature = "tracer")]
 use emulator::tracer::TracerArgs;
@@ -36,6 +37,9 @@ pub struct Args {
     #[arg(short, long, default_value = "128")]
     pub memory: usize,
 
+    #[command(flatten)]
+    pub inst_decoder_args: InstDecoderArgs,
+
     /// 追踪器参数
     #[cfg(feature = "tracer")]
     #[command(flatten)]
@@ -44,9 +48,9 @@ pub struct Args {
 
 pub fn build_emu_run_blocking(args: Args) -> Result<()> {
     // 创建模拟器
-    let mut emu = Emulator::new(args.memory * 1024 * 1024)?;
+    let mut emu = Emulator::new(&args)?;
 
-    if let Some(elf_path) = args.elf {
+    if let Some(elf_path) = &args.elf {
         info!(path = %elf_path, "加载ELF文件");
         emu.load_elf(&elf_path)?;
     }

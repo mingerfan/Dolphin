@@ -2,6 +2,7 @@
 
 mod exception;
 pub mod execute;
+mod instructions;
 pub mod state;
 
 #[cfg(feature = "gdb")] // 条件编译 GDB 模块
@@ -11,17 +12,18 @@ pub mod tracer;
 
 mod memory;
 
-
+use crate::emulator::instructions::is_compressed;
 use crate::utils::disasm_riscv64_instruction;
 use crate::{const_values, utils::ringbuf::RingBuffer};
 use anyhow::{Context, Result};
 pub use exception::Exception;
 pub use execute::Execute;
 
-pub use memory::{Memory, MemoryError};
 #[cfg(feature = "gdb")] // 条件编译 GDB 模块
 pub use gdb::EmuGdbEventLoop;
+pub use memory::{Memory, MemoryError};
 
+pub use instructions::InstDecoderArgs;
 pub use state::State;
 pub use state::{Event, ExecMode, ExecState};
 
@@ -33,15 +35,15 @@ pub struct Emulator {
     exec_mode: ExecMode,
     event: Event,
     event_list: RingBuffer<Event>,
+    decoder: instructions::InstDecoder,
     #[cfg(feature = "gdb")] // 条件编译 GDB 相关
     gdb_data: gdb::GdbData,
 }
 
-
 impl Emulator {
     /// 创建新的模拟器实例
-    pub fn new(memory_size: usize) -> Result<Self> {
-        let state = State::new(memory_size)?;
+    pub fn new(args: &crate::Args) -> Result<Self> {
+        let state = State::new(args.memory * 1024 * 1024)?;
         let exec_mode = if cfg!(feature = "gdb") {
             ExecMode::Continue // 如果启用了GDB，默认执行模式为连续执行
         } else {
@@ -53,6 +55,7 @@ impl Emulator {
             exec_mode,
             event: Event::None,
             event_list: RingBuffer::new(const_values::EVENT_LIST_SIZE),
+            decoder: instructions::InstDecoder::new(&args.inst_decoder_args),
             #[cfg(feature = "gdb")] // 条件编译 GDB 相关
             gdb_data: gdb::GdbData::new(),
         })
@@ -80,12 +83,28 @@ impl Emulator {
                 .with_context(|| format!("无法从PC {:#x} 处读取指令", pc))?;
             (pc, instruction)
         };
-        
 
         // 执行指令
-        let mut executor = execute::RV64I::new(instruction);
+        // let mut executor = execute::RV64I::new(instruction);
 
-        let event = executor.execute(&mut self.state).with_context(|| {
+        // let event = executor.execute(&mut self.state).with_context(|| {
+        //     let instruction_msg =
+        //         disasm_riscv64_instruction(instruction, pc).unwrap_or("未知指令".to_string());
+        //     format!(
+        //         "无法执行PC {:#010x} 处的指令 {:#010x} ({}), cpu状态:\n{}",
+        //         pc, instruction, instruction_msg, self.state
+        //     )
+        // })?;
+        let inst = self.decoder.fast_path(instruction).with_context(|| {
+            let instruction_msg =
+                disasm_riscv64_instruction(instruction, pc).unwrap_or("未知指令".to_string());
+            format!(
+                "无法解码PC {:#010x} 处的指令 {:#010x} ({}), cpu状态:\n{}",
+                pc, instruction, instruction_msg, self.state
+            )
+        })?;
+
+        (inst.execute)(self, instruction, pc).with_context(|| {
             let instruction_msg =
                 disasm_riscv64_instruction(instruction, pc).unwrap_or("未知指令".to_string());
             format!(
@@ -93,15 +112,20 @@ impl Emulator {
                 pc, instruction, instruction_msg, self.state
             )
         })?;
-        self.event = event.event;
-        #[cfg(feature = "gdb")] // 条件编译 GDB 相关
+
         if self.event == Event::Halted {
             self.exec_state = ExecState::End; // 结束执行状态
         }
         #[cfg(feature = "tracer")] // 条件编译追踪器相关
         tracer::global_trace(self);
 
-        self.state.set_pc(pc + 4);
+        if is_compressed(instruction) {
+            // 如果是压缩指令，PC需要加2
+            self.state.set_pc(pc + 2);
+        } else {
+            // 否则PC加4
+            self.state.set_pc(pc + 4);
+        }
         Ok(())
     }
 
