@@ -32,6 +32,7 @@ pub struct Emulator {
     exec_state: ExecState,
     exec_mode: ExecMode,
     event: Event,
+    execption: Option<Exception>,
     event_list: RingBuffer<Event>,
     decoder: instructions::InstDecoder,
     #[cfg(feature = "gdb")] // 条件编译 GDB 相关
@@ -52,6 +53,7 @@ impl Emulator {
             exec_state: ExecState::Idle,
             exec_mode,
             event: Event::None,
+            execption: None,
             event_list: RingBuffer::new(const_values::EVENT_LIST_SIZE),
             decoder: instructions::InstDecoder::new(&args.inst_decoder_args),
             #[cfg(feature = "gdb")] // 条件编译 GDB 相关
@@ -190,6 +192,36 @@ impl Emulator {
     #[inline(always)]
     pub fn get_exec_mode(&self) -> ExecMode {
         self.exec_mode
+    }
+
+    #[inline(always)]
+    pub fn read_memory(&self, addr: u64, size: usize) -> Result<Vec<u8>> {
+        self.state.read_memory(addr, size)
+    }
+
+    #[inline(always)]
+    pub fn write_memory(&mut self, addr: u64, data: &[u8]) -> Result<()> {
+        self.state.write_memory(addr, data)
+    }
+
+    #[inline(always)]
+    pub fn get_reg(&self, reg: u64) -> Result<u64> {
+        self.state.get_reg(reg)
+    }
+
+    #[inline(always)]
+    pub fn set_reg(&mut self, reg: u64, value: u64) -> Result<()> {
+        self.state.set_reg(reg, value)
+    }
+
+    #[inline(always)]
+    pub fn get_pc(&self) -> u64 {
+        self.state.get_pc()
+    }
+
+    #[inline(always)]
+    pub fn set_pc(&mut self, pc: u64) {
+        self.state.set_pc(pc)
     }
 
     // 返回事件列表

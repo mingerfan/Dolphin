@@ -94,12 +94,15 @@ impl State {
             .map_err(|_| StateError::InvalidInstructionBytes(pc))?)
     }
 
+    #[inline(always)]
     pub fn get_regs(&self) -> &[u64; 32] {
         &self.registers
     }
 
     /// 获取寄存器值
-    pub fn get_reg(&self, reg: usize) -> Result<u64> {
+    /// #[inline(always)]
+    pub fn get_reg(&self, reg: u64) -> Result<u64> {
+        let reg = reg as usize;
         if reg >= self.registers.len() {
             return Err(StateError::InvalidRegister(reg).into());
         }
@@ -111,7 +114,8 @@ impl State {
     }
 
     /// 设置寄存器值
-    pub fn set_reg(&mut self, reg: usize, value: u64) -> Result<()> {
+    pub fn set_reg(&mut self, reg: u64, value: u64) -> Result<()> {
+        let reg = reg as usize;
         if reg >= self.registers.len() {
             return Err(StateError::InvalidRegister(reg).into());
         }
@@ -135,6 +139,7 @@ impl State {
     }
 
     /// 获取CSR值
+    #[inline(always)]
     pub fn get_csr(&self, csr: u16) -> Result<u64> {
         self.csrs
             .get(&csr)
@@ -143,6 +148,7 @@ impl State {
     }
 
     /// 设置CSR值
+    #[inline(always)]
     pub fn set_csr(&mut self, csr: u16, value: u64) -> Result<()> {
         self.csrs.insert(csr, value);
         Ok(())

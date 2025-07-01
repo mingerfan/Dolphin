@@ -44,6 +44,11 @@ pub fn is_compressed(inst: u32) -> bool {
     inst & 0b11 != 0b11
 }
 
+#[inline(always)]
+pub fn is_inst_addr_misaligned(pc: u64) -> bool {
+    pc & 0b11 != 0
+}
+
 impl InstDecoder {
     pub fn new(args: &InstDecoderArgs) -> Self {
         let cache = LruCache::with_hasher(

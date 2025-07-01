@@ -144,6 +144,16 @@ pub fn sign_extend_64(value: u64, num_bits: u64) -> u64 {
     ((value << shift_amount) as i64 >> shift_amount) as u64
 }
 
+#[inline(always)]
+pub fn sign_extend_32(value: u64, num_bits: u64) -> u64 {
+    // assert!(num_bits <= 32, "num_bits must be <= 32 for 32-bit sign extension");
+    let value32 = value as u32; // 取低32位
+    let shift_amount = (32 - num_bits) as u32; // 扩展到32位
+    // 将符号位移到最高位，然后算术右移，最后扩展到64位
+    ((value32 << shift_amount) as i32 >> shift_amount) as u32 as u64
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -438,6 +448,32 @@ mod tests {
     // }
 
     #[test]
+    fn test_sign_extend_32() {
+        // 8位正数
+        assert_eq!(sign_extend_32(0x7F, 8), 0x7F);
+        // 8位负数
+        assert_eq!(sign_extend_32(0x80, 8), 0xFFFFFF80);
+        // 12位正数
+        assert_eq!(sign_extend_32(0x7FF, 12), 0x7FF);
+        // 12位负数
+        assert_eq!(sign_extend_32(0x800, 12), 0xFFFFF800);
+        // 16位正数
+        assert_eq!(sign_extend_32(0x7FFF, 16), 0x7FFF);
+        // 16位负数
+        assert_eq!(sign_extend_32(0x8000, 16), 0xFFFF8000);
+        // 24位正数
+        assert_eq!(sign_extend_32(0x7FFFFF, 24), 0x7FFFFF);
+        // 24位负数
+        assert_eq!(sign_extend_32(0x800000, 24), 0xFF800000);
+        // 32位正数
+        assert_eq!(sign_extend_32(0x7FFFFFFF, 32), 0x7FFFFFFF);
+        // 32位负数
+        assert_eq!(sign_extend_32(0x80000000, 32), 0x80000000);
+        // 边界测试
+        assert_eq!(sign_extend_32(0xFFFFFFFF, 32), 0xFFFFFFFF);
+    }
+
+    #[test]
     fn test_sign_extend_64() {
         // 8位正数
         assert_eq!(sign_extend_64(0x7F, 8), 0x7F);
@@ -465,6 +501,7 @@ mod tests {
         assert_eq!(sign_extend_64(0xFFFFFFFFFFFFFFFF, 64), 0xFFFFFFFFFFFFFFFF);
         assert_eq!(sign_extend_64(0x0, 64), 0x0);
     }
+
 
     #[test]
     fn test_extreme_values() {
