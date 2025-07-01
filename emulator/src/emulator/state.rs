@@ -51,13 +51,13 @@ pub enum Event {
 #[derive(Debug, Clone)]
 pub struct State {
     // 通用寄存器
-    registers: [u64; 32],
+    pub registers: [u64; 32],
     // 程序计数器
-    pc: u64,
+    pub pc: u64,
     // CSR寄存器
-    csrs: rustc_hash::FxHashMap<u16, u64>,
+    pub csrs: rustc_hash::FxHashMap<u16, u64>,
     // 内存
-    memory: Memory,
+    pub memory: Memory,
 }
 
 impl State {
