@@ -438,6 +438,35 @@ mod tests {
     // }
 
     #[test]
+    fn test_sign_extend_64() {
+        // 8位正数
+        assert_eq!(sign_extend_64(0x7F, 8), 0x7F);
+        // 8位负数
+        assert_eq!(sign_extend_64(0x80, 8), 0xFFFFFFFFFFFFFF80);
+        // 12位正数
+        assert_eq!(sign_extend_64(0x7FF, 12), 0x7FF);
+        // 12位负数
+        assert_eq!(sign_extend_64(0x800, 12), 0xFFFFFFFFFFFFF800);
+        // 16位正数
+        assert_eq!(sign_extend_64(0x7FFF, 16), 0x7FFF);
+        // 16位负数
+        assert_eq!(sign_extend_64(0x8000, 16), 0xFFFFFFFFFFFF8000);
+        // 32位正数
+        assert_eq!(sign_extend_64(0x7FFFFFFF, 32), 0x7FFFFFFF);
+        // 32位负数
+        assert_eq!(sign_extend_64(0x80000000, 32), 0xFFFFFFFF80000000);
+        // 63位正数
+        assert_eq!(sign_extend_64(0x7FFFFFFFFFFFFFFF, 63), 0xFFFFFFFFFFFFFFFF);
+        // 63位负数
+        assert_eq!(sign_extend_64(0x4000000000000000, 63), 0xC000000000000000);
+        // 64位正数
+        assert_eq!(sign_extend_64(0x7FFFFFFFFFFFFFFF, 64), 0x7FFFFFFFFFFFFFFF);
+        // 64位（不变）
+        assert_eq!(sign_extend_64(0xFFFFFFFFFFFFFFFF, 64), 0xFFFFFFFFFFFFFFFF);
+        assert_eq!(sign_extend_64(0x0, 64), 0x0);
+    }
+
+    #[test]
     fn test_extreme_values() {
         let mut x = u64::MAX;
         x.set_bit(0, false);
