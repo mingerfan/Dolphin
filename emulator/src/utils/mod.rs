@@ -1,6 +1,7 @@
 //! 工具模块
 
 mod elf;
+pub mod bit_utils;
 pub mod ringbuf;
 pub mod disasm;
 

@@ -3,14 +3,16 @@ mod rv64a;
 mod rv64i;
 mod rv64m;
 
-use crate::const_values;
-use crate::emulator::Emulator;
 use anyhow::{Ok, Result};
 use clap::Args;
 use core::panic;
 use hashlink::LruCache;
 use nohash_hasher::{self, BuildNoHashHasher};
 use std::collections::HashMap;
+
+use crate::const_values;
+use crate::emulator::Emulator;
+use crate::utils::bit_utils::{BitSlice, sign_extend_64};
 
 #[derive(Args, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct InstDecoderArgs {
@@ -84,7 +86,7 @@ impl InstDecoder {
         self.cache.capacity() != 0
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn slow_path(&mut self, inst: u32) -> Result<&Instruction> {
         if is_compressed(inst) {
             self.compressed_instructions
@@ -139,4 +141,112 @@ impl InstDecoder {
             .get(&inst)
             .ok_or(anyhow::anyhow!("Instruction not found in cache"))
     }
+}
+
+struct FormatR {
+    rs1: u64,
+    rs2: u64,
+    rd: u64,
+}
+
+impl FormatR {}
+
+#[inline(always)]
+fn parse_format_r(inst: u32) -> FormatR {
+    let rs1 = inst.bit_range(15..20);
+    let rs2 = inst.bit_range(20..25);
+    let rd = inst.bit_range(7..12);
+    FormatR { rs1, rs2, rd }
+}
+
+struct FormatI {
+    rs1: u64,
+    rd: u64,
+    imm: u64,
+}
+
+impl FormatI {}
+
+#[inline(always)]
+fn parse_format_i(inst: u32) -> FormatI {
+    let rs1 = inst.bit_range(15..20);
+    let rd = inst.bit_range(7..12);
+    let imm = inst.bit_range(20..32);
+    // 符号扩展
+    let imm = sign_extend_64(imm, 12);
+    FormatI { rs1, rd, imm }
+}
+
+struct FormatS {
+    rs1: u64,
+    rs2: u64,
+    imm: u64,
+}
+
+impl FormatS {}
+
+#[inline(always)]
+fn parse_format_s(inst: u32) -> FormatS {
+    let rs1 = inst.bit_range(15..20);
+    let rs2 = inst.bit_range(20..25);
+    let imm = inst.bit_range(25..32) << 5 | inst.bit_range(7..12);
+    // 符号扩展
+    let imm = sign_extend_64(imm, 12);
+    FormatS { rs1, rs2, imm }
+}
+
+struct FormatB {
+    rs1: u64,
+    rs2: u64,
+    imm: u64,
+}
+
+impl FormatB {}
+
+#[inline(always)]
+fn parse_format_b(inst: u32) -> FormatB {
+    let rs1 = inst.bit_range(15..20);
+    let rs2 = inst.bit_range(20..25);
+    let imm = (inst.bit(31) as u64) << 12
+        | (inst.bit(7) as u64) << 11
+        | inst.bit_range(25..31) << 5
+        | inst.bit_range(8..12) << 1;
+    // 符号扩展
+    let imm = sign_extend_64(imm, 13);
+    FormatB { rs1, rs2, imm }
+}
+
+struct FormatU {
+    rd: u64,
+    imm: u64,
+}
+
+impl FormatU {}
+
+#[inline(always)]
+fn parse_format_u(inst: u32) -> FormatU {
+    let imm = inst.bit_range(12..32) << 12;
+    let rd = inst.bit_range(7..12);
+    // 符号扩展
+    let imm = sign_extend_64(imm, 32);
+    FormatU { rd, imm }
+}
+
+struct FormatJ {
+    rd: u64,
+    imm: u64,
+}
+
+impl FormatJ {}
+
+#[inline(always)]
+fn parse_format_j(inst: u32) -> FormatJ {
+    let rd = inst.bit_range(7..12);
+    let imm = (inst.bit(31) as u64) << 20
+        | inst.bit_range(12..20) << 12
+        | (inst.bit(20) as u64) << 11
+        | inst.bit_range(21..31) << 1;
+    // 符号扩展
+    let imm = sign_extend_64(imm, 21);
+    FormatJ { rd, imm }
 }
