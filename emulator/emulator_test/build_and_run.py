@@ -14,7 +14,7 @@ def setup_paths(source_name):
     binary_name = source_name
     source_binary = os.path.join(build_dir, "bin", binary_name)
     target_binary = os.path.join(target_dir, f"{binary_name}.bin")
-    
+
     return {
         "script_dir": script_dir,
         "source_path": source_path,
@@ -43,7 +43,7 @@ def build_project(paths, source_name):
         "-S", os.path.join(paths["script_dir"], "test_c"),
         "-B", paths["build_dir"]
     ]
-    
+
     try:
         subprocess.run(cmake_configure, check=True)
     except subprocess.CalledProcessError as e:
@@ -57,7 +57,7 @@ def build_project(paths, source_name):
         "--build", paths["build_dir"],
         "--target", source_name
     ]
-    
+
     try:
         subprocess.run(cmake_build, check=True)
     except subprocess.CalledProcessError as e:
@@ -68,7 +68,7 @@ def build_project(paths, source_name):
     if not os.path.exists(paths["source_binary"]):
         print(f"Error: Built binary not found at {paths['source_binary']}")
         sys.exit(1)
-    
+
     shutil.copy2(paths["source_binary"], paths["target_binary"])
     print(f"Binary copied to {paths['target_binary']}")
 
@@ -88,14 +88,14 @@ def run_simulator(target_binary, debug_mode, script_dir):
 def disassemble_binary(binary_path, text_only=False):
     """Disassemble the binary using objdump"""
     print(f"Disassembling {os.path.basename(binary_path)}...")
-    
+
     objdump_cmd = ["riscv64-linux-gnu-objdump"]
-    
+
     if text_only:
         objdump_cmd.extend(["-d", binary_path])  # disassemble code sections
     else:
         objdump_cmd.extend(["-D", binary_path])  # disassemble all sections
-    
+
     try:
         result = subprocess.run(objdump_cmd, check=True, capture_output=True, text=True)
         print(result.stdout)
@@ -123,10 +123,10 @@ def main():
     # Clean if requested
     if args.clean:
         clean_build(paths["build_dir"])
-    
+
     # Build the project
     build_project(paths, args.source)
-    
+
     # Show disassembly if requested
     if args.disassemble or args.text_only:
         disassemble_binary(paths["target_binary"], args.text_only)
