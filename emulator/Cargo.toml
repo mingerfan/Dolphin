@@ -38,4 +38,5 @@ hashlink = "0.10.0"
 [features]
 gdb = ["gdbstub", "gdbstub_arch"]  # 新增 GDB 特性
 tracer = []
-default = []
+difftest = []
+default = ["difftest"]

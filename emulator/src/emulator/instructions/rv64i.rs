@@ -272,6 +272,7 @@ pub const RV_I: &[Instruction] = &[
         execute: |emu: &mut Emulator, inst: u32, _pc: u64| {
             let i = parse_format_i(inst);
             let lhs = emu.get_reg(i.rs1)?;
+            tracing::info!("i.rs1: {}, i.imm: 0x{:x}", i.rs1, i.imm);
             emu.set_reg(i.rd, lhs.wrapping_add(i.imm))
         },
     },

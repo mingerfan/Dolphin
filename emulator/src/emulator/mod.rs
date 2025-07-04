@@ -37,6 +37,8 @@ pub struct Emulator {
     decoder: instructions::InstDecoder,
     #[cfg(feature = "gdb")] // 条件编译 GDB 相关
     gdb_data: gdb::GdbData,
+    #[cfg(feature = "difftest")] // 条件编译 DiffTest 相关
+    ref_emu: rv64emu::rv64core::cpu_core::CpuCore,
 }
 
 impl Emulator {
@@ -48,6 +50,30 @@ impl Emulator {
         } else {
             ExecMode::None // 否则为无执行模式
         };
+        #[cfg(feature = "difftest")]
+        let ref_emu;
+        #[cfg(feature = "difftest")]
+        {
+            use std::{cell::RefCell, rc::Rc};
+
+            use rv64emu::{
+                config::Config,
+                rv64core::{bus, cpu_core},
+            };
+
+            use crate::difftest::Difftest;
+            let mut ref_config = rv64emu::config::Config::new();
+            ref_config.set_decode_cache_size(1024);
+            ref_config.set_mmu_type("bare");
+            ref_config.set_isa("rv64imac");
+            let bus = Rc::new(RefCell::new(bus::Bus::new()));
+            let rc_config = Rc::new(ref_config);
+            let builder = cpu_core::CpuCoreBuild::new(bus, rc_config);
+            let mut in_core = builder.build();
+            in_core.init();
+            ref_emu = in_core;
+        }
+
         Ok(Self {
             state,
             exec_state: ExecState::Idle,
@@ -58,6 +84,8 @@ impl Emulator {
             decoder: instructions::InstDecoder::new(&args.inst_decoder_args),
             #[cfg(feature = "gdb")] // 条件编译 GDB 相关
             gdb_data: gdb::GdbData::new(),
+            #[cfg(feature = "difftest")] // 条件编译 DiffTest 相关
+            ref_emu,
         })
     }
 
@@ -143,6 +171,24 @@ impl Emulator {
             self.event_list.push_overwrite(self.event);
         }
 
+        #[cfg(feature = "difftest")] // 条件编译 DiffTest 相关
+        {
+            use crate::difftest::Difftest;
+            tracing::info!("check diff");
+
+            Difftest::step(&mut self.ref_emu);
+            let ref_state = self.ref_emu.self_state();
+            if ref_state != self.self_state() {
+                use anyhow::anyhow;
+
+                return Err(anyhow!(
+                    "Failed in difftest check, ref state: {}, self state: {}",
+                    ref_state,
+                    self.state
+                ));
+            }
+        }
+
         if self.exec_state != ExecState::End {
             self.exec_state = ExecState::Idle;
         }
@@ -222,6 +268,11 @@ impl Emulator {
     #[inline(always)]
     pub fn set_pc(&mut self, pc: u64) {
         self.state.set_pc(pc)
+    }
+
+    #[inline(always)]
+    pub fn get_regs(&self) -> &[u64; 32] {
+        self.state.get_regs()
     }
 
     // 返回事件列表

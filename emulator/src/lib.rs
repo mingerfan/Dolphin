@@ -3,7 +3,9 @@ pub mod const_values;
 pub mod emulator;
 pub mod system;
 pub mod utils;
-mod emu_ref;
+
+#[cfg(feature = "difftest")]
+mod difftest;
 
 use anyhow::Result;
 use clap::Parser;
