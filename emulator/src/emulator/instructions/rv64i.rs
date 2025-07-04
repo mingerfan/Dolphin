@@ -1,5 +1,7 @@
 
 
+use std::result;
+
 use crate::emulator::{Emulator, Exception::*, state::Event};
 
 use super::insts::*;
@@ -492,6 +494,7 @@ pub const RV_I: &[Instruction] = &[
             // 处理 ECALL 指令
             tracing::warn!("执行 ECALL 指令, 但目前未实现系统调用处理");
             todo!("Implement ECALL handling");
+            // Ok(())
         }
     },
     Instruction {
@@ -515,4 +518,39 @@ pub const RV_I: &[Instruction] = &[
             emu.set_reg(i.rd, sign_extend_64(result, 32))
         }
     },
+    Instruction {
+        mask: MASK_SLLIW,
+        identifier: MATCH_SLLIW,
+        name: "slliw",
+        execute: |emu: &mut Emulator, inst: u32, _pc: u64| {
+            let i = parse_format_i(inst);
+            let lhs = emu.get_reg(i.rs1)?;
+            let shamt = (i.imm & 0x1F) as u64; // 确保移位量在0-31范围内
+            let result = (lhs << shamt).bit_range(0..32);
+            emu.set_reg(i.rd, sign_extend_64(result, 32))
+        }
+    },
+    Instruction {
+        mask: MASK_SRLIW,
+        identifier: MATCH_SRLIW,
+        name: "srliw",
+        execute: |emu: &mut Emulator, inst: u32, _pc: u64| {
+            let i = parse_format_i(inst);
+            let lhs = emu.get_reg(i.rs1)?.bit_range(0..32);
+            let shamt = (i.imm & 0x1F) as u64;
+            let result = lhs >> shamt;
+            emu.set_reg(i.rd, sign_extend_64(result, 32))
+        }
+    },
+    Instruction {
+        mask: MASK_SRAIW,
+        identifier: MATCH_SRAIW,
+        name: "sraiw",
+        execute: |emu: &mut Emulator, inst: u32, _pc: u64| {
+            let i = parse_format_i(inst);
+            let lhs = emu.get_reg(i.rs1)?.bit_range(0..32);
+            // let shamt = (i.imm & 0)
+            Ok(())
+        }
+    }
 ];

@@ -104,6 +104,14 @@ impl Emulator {
             )
         })?;
 
+        if is_compressed(instruction) {
+            // 如果是压缩指令，PC需要加2
+            self.state.set_pc(pc + 2);
+        } else {
+            // 否则PC加4
+            self.state.set_pc(pc + 4);
+        }
+
         (inst.execute)(self, instruction, pc).with_context(|| {
             let instruction_msg =
                 disasm_riscv64_instruction(instruction, pc).unwrap_or("未知指令".to_string());
@@ -118,14 +126,6 @@ impl Emulator {
         }
         #[cfg(feature = "tracer")] // 条件编译追踪器相关
         tracer::global_trace(self);
-
-        if is_compressed(instruction) {
-            // 如果是压缩指令，PC需要加2
-            self.state.set_pc(pc + 2);
-        } else {
-            // 否则PC加4
-            self.state.set_pc(pc + 4);
-        }
         Ok(())
     }
 

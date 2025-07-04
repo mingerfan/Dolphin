@@ -16,8 +16,11 @@ use crate::utils::bit_utils::{BitSlice, sign_extend_64};
 
 #[derive(Args, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct InstDecoderArgs {
+    #[arg(long, default_value_t = false)]
     enable_m: bool, // 是否启用M扩展
+    #[arg(long, default_value_t = false)]
     enable_a: bool, // 是否启用A扩展
+    #[arg(long, default_value_t = false)]
     enable_c: bool, // 是否启用C扩展
 }
 
@@ -138,7 +141,7 @@ impl InstDecoder {
 
     #[inline(always)]
     pub fn fast_path(&mut self, inst: u32) -> Result<&Instruction> {
-        if is_compressed(inst) || !self.cache_has_capacity() {
+        if is_compressed(inst) || !self.cache_has_capacity() || !self.cache.contains_key(&inst) {
             let temp = self.slow_path(inst);
             return temp;
         }
