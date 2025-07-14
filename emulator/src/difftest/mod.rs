@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use rv64emu::{self, rv64core::cpu_core::CpuCore};
+use rv64emu::{self, rv64core::cpu_core::{CpuCore, CpuState}};
 
 use crate::emulator::Emulator;
 
@@ -31,12 +31,14 @@ pub trait Difftest {
     fn mode(&self) -> DiffMode;
     fn self_state(&self) -> DiffState;
     fn step(&mut self) -> bool;
+    fn set_regs(&mut self, regs: [u64; 32]);
+    fn set_pc(&mut self, pc: u64);
+    fn get_mem(&mut self, addr: u64, size: usize) -> u64;
+    fn set_mem(&mut self, addr: u64, data: u64, len: usize);
 }
 
 impl Difftest for Emulator {
-    fn init(&mut self) {
-
-    }
+    fn init(&mut self) {}
 
     fn mode(&self) -> DiffMode {
         DiffMode::Dut
@@ -52,11 +54,34 @@ impl Difftest for Emulator {
     fn step(&mut self) -> bool {
         self.steps(1).is_ok()
     }
+
+    fn set_regs(&mut self, regs: [u64; 32]) {
+        for i in 0..32 {
+            let _ = self.set_reg(i, regs[i as usize]);
+        }
+    }
+
+    fn set_pc(&mut self, pc: u64) {
+        self.set_pc(pc);
+    }
+
+    fn get_mem(&mut self, addr: u64, size: usize) -> u64 {
+        let mut data = 0u64.to_le_bytes();
+        data[..size].copy_from_slice(
+            &self.read_memory(addr, size).unwrap()[addr as usize..addr as usize + size],
+        );
+        u64::from_le_bytes(data)
+    }
+
+    fn set_mem(&mut self, addr: u64, data: u64, len: usize) {
+        let data = data.to_le_bytes();
+        self.write_memory(addr, &data[..len]).unwrap();
+    }
 }
 
 impl Difftest for CpuCore {
     fn init(&mut self) {
-
+        self.cpu_state = CpuState::Running;
     }
 
     fn mode(&self) -> DiffMode {
@@ -77,5 +102,23 @@ impl Difftest for CpuCore {
     fn step(&mut self) -> bool {
         self.execute(1);
         true
+    }
+
+    fn set_regs(&mut self, regs: [u64; 32]) {
+        for i in 0..32 {
+            self.gpr.write(i, regs[i as usize]);
+        }
+    }
+
+    fn set_pc(&mut self, pc: u64) {
+        self.npc = pc;
+    }
+
+    fn get_mem(&mut self, addr: u64, size: usize) -> u64 {
+        <CpuCore as rv64emu::difftest::difftest_trait::Difftest>::get_mem(self, addr, size)
+    }
+
+    fn set_mem(&mut self, addr: u64, data: u64, len: usize) {
+        <CpuCore as rv64emu::difftest::difftest_trait::Difftest>::set_mem(self, addr, data, len);
     }
 }

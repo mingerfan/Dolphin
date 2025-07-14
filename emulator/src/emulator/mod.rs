@@ -22,6 +22,8 @@ pub use gdb::EmuGdbEventLoop;
 pub use memory::{Memory, MemoryError};
 
 pub use instructions::InstDecoderArgs;
+#[cfg(feature = "difftest")]
+use rv64emu::rv64core::cpu_core::CpuCore;
 pub use state::State;
 pub use state::{Event, ExecMode, ExecState};
 
@@ -56,10 +58,7 @@ impl Emulator {
         {
             use std::{cell::RefCell, rc::Rc};
 
-            use rv64emu::{
-                config::Config,
-                rv64core::{bus, cpu_core},
-            };
+            use rv64emu::rv64core::{bus, cpu_core};
 
             use crate::difftest::Difftest;
             let mut ref_config = rv64emu::config::Config::new();
@@ -209,6 +208,24 @@ impl Emulator {
                 self.event_list.push_overwrite(self.event);
             }
 
+            #[cfg(feature = "difftest")] // 条件编译 DiffTest 相关
+            {
+                use crate::difftest::Difftest;
+                tracing::info!("check diff");
+
+                Difftest::step(&mut self.ref_emu);
+                let ref_state = self.ref_emu.self_state();
+                if ref_state != self.self_state() {
+                    use anyhow::anyhow;
+
+                    return Err(anyhow!(
+                        "Failed in difftest check, ref state: {}, self state: {}",
+                        ref_state,
+                        self.state
+                    ));
+                }
+            }
+
             if self.exec_state == ExecState::End {
                 break;
             }
@@ -286,5 +303,10 @@ impl Emulator {
 
     pub fn get_cur_event(&self) -> Event {
         self.event
+    }
+
+    #[cfg(feature = "difftest")]
+    pub fn get_ref_mut(&mut self) -> &mut CpuCore {
+        &mut self.ref_emu
     }
 }
