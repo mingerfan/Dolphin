@@ -23,7 +23,10 @@ pub use memory::{Memory, MemoryError};
 
 pub use instructions::InstDecoderArgs;
 #[cfg(feature = "difftest")]
-use rv64emu::rv64core::cpu_core::CpuCore;
+use rv64emu::rv64core::{
+    bus::{DeviceType},
+    cpu_core::CpuCore
+};
 pub use state::State;
 pub use state::{Event, ExecMode, ExecState};
 
@@ -58,7 +61,7 @@ impl Emulator {
         {
             use std::{cell::RefCell, rc::Rc};
 
-            use rv64emu::rv64core::{bus, cpu_core};
+            use rv64emu::{device::device_trait::DeviceBase, rv64core::{bus, cpu_core}};
 
             use crate::difftest::Difftest;
             let mut ref_config = rv64emu::config::Config::new();
@@ -67,8 +70,19 @@ impl Emulator {
             ref_config.set_isa("rv64imac");
             let bus = Rc::new(RefCell::new(bus::Bus::new()));
             let rc_config = Rc::new(ref_config);
-            let builder = cpu_core::CpuCoreBuild::new(bus, rc_config);
-            let mut in_core = builder.build();
+            let mut in_core = cpu_core::CpuCoreBuild::new(bus.clone(), rc_config)
+                .with_boot_pc(const_values::MEMORY_BASE)
+                .with_smode(false)
+                .build();
+            let mem = rv64emu::device::device_memory::DeviceMemory::new(128 * 1024 * 1024);
+            let device_name = mem.get_name();
+            bus.borrow_mut().add_device(DeviceType {
+                start: const_values::MEMORY_BASE,
+                len: mem.size() as u64,
+                instance: Box::new(mem),
+                name: device_name,
+            });
+
             in_core.init();
             ref_emu = in_core;
         }

@@ -20,10 +20,10 @@ fn main() -> Result<()> {
         .with_line_number(true) // 显示行号
         .with_span_events(FmtSpan::ACTIVE) // 跟踪span的生命周期
         .init();
-    
+
     // 解析命令行参数
     let args = Args::parse();
-    
+
     info!(version = env!("CARGO_PKG_VERSION"), "启动RISC-V模拟器");
     info!(memory_size_mb = args.memory, "配置内存大小");
 
