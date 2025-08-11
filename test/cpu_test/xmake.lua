@@ -6,8 +6,7 @@ toolchain("riscv64")
 toolchain_end()
 
 -- 全局编译选项
-add_rules("mode.debug", "mode.release")
-set_languages("c99")
+-- add_rules("mode.debug", "mode.release")
 set_policy("check.auto_ignore_flags", false)  -- 强制启用所有编译标志
 set_arch("riscv64")  -- 明确指定目标架构
 
@@ -15,6 +14,8 @@ set_arch("riscv64")  -- 明确指定目标架构
 set_policy("build.across_targets_in_parallel", false)
 add_cflags("-march=rv64i", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
 add_asflags("-march=rv64i", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
+add_cflags("-O0", {force = true})
+add_asflags("-O0", {force = true})
 add_ldflags("-Tlinker.ld", {force = true})
 
 -- 设置默认使用 riscv64 工具链
@@ -36,7 +37,7 @@ target("loop")
     add_files("start.S", "loop.c")
     set_targetdir("bin")
 
--- 自定义任务: clean
+-- 自定义任务: cleanriscv64-linux-gnu-objdump
 task("clean")
     on_run(function()
         os.rm("build")
@@ -70,11 +71,11 @@ task("test_all")
         import("core.project.task")
         local results = {}
         local targets = {"hello", "add", "loop"}
-        
+
         for _, name in ipairs(targets) do
             print("Testing target:", name)
             local entry = {name = name}
-            
+
             -- 构建阶段
             try {
                 function()
@@ -88,7 +89,7 @@ task("test_all")
                     end
                 }
             }
-            
+
             -- 运行阶段(如果构建成功)
             if entry.build_ok then
                 try {
@@ -104,10 +105,10 @@ task("test_all")
                     }
                 }
             end
-            
+
             table.insert(results, entry)
         end
-        
+
         -- 输出测试报告
         print("\nTest Results:")
         for _, r in ipairs(results) do
@@ -131,11 +132,13 @@ task("test_all")
 task("test_internal")
     local emu_dir = "../../emulator"
     local cur_dir = os.curdir()
-    
+
     on_run(function(target, gdb, tracer)
+        import("core.project.task")
         import("core.base.option")
         -- os.setenv("CARGO_TERM_QUIET", "true")
         os.setenv("RUSTFLAGS", "-Awarnings")
+        task.run("build", {target = target})
         local binary = path.join("bin", target or "hello")
         print("Running binary:", binary)
         binary = path.join(cur_dir, binary)
@@ -149,13 +152,13 @@ task("test_internal")
             if tracer then
                 table.insert(features, "tracer")
             end
-            
+
             local cmd = "cargo run --release"
             if #features > 0 then
                 cmd = cmd .. " --features " .. table.concat(features, ",")
             end
             cmd = cmd .. " -- -e " .. binary
-            
+
             os.exec(cmd)
         else
             raise("Binary not found: " .. binary)
