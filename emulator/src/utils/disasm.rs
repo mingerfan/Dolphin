@@ -1,6 +1,6 @@
 //! RISC-V 64位指令反汇编模块
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use capstone::prelude::*;
 
 /// RISC-V 64位反汇编器
@@ -22,17 +22,18 @@ impl RiscvDisassembler {
     }
 
     /// 反汇编单条指令
-    /// 
+    ///
     /// # 参数
     /// - `code`: 4字节的指令码
     /// - `address`: 指令地址
-    /// 
+    ///
     /// # 返回
     /// 返回反汇编后的文本表示
     pub fn disasm_instruction(&self, code: u32, address: u64) -> Result<String> {
         let code_bytes = code.to_le_bytes();
-        
-        let insns = self.cs
+
+        let insns = self
+            .cs
             .disasm_all(&code_bytes, address)
             .map_err(|e| anyhow!("Failed to disassemble: {}", e))?;
 
@@ -43,7 +44,7 @@ impl RiscvDisassembler {
         let insn = &insns[0];
         let mnemonic = insn.mnemonic().unwrap_or("<unknown>");
         let op_str = insn.op_str().unwrap_or("");
-        
+
         if op_str.is_empty() {
             Ok(mnemonic.to_string())
         } else {
@@ -52,15 +53,16 @@ impl RiscvDisassembler {
     }
 
     /// 反汇编指令缓冲区
-    /// 
+    ///
     /// # 参数
     /// - `code`: 指令字节缓冲区
     /// - `start_address`: 起始地址
-    /// 
+    ///
     /// # 返回
     /// 返回每条指令的反汇编文本列表
     pub fn disasm_buffer(&self, code: &[u8], start_address: u64) -> Result<Vec<String>> {
-        let insns = self.cs
+        let insns = self
+            .cs
             .disasm_all(code, start_address)
             .map_err(|e| anyhow!("Failed to disassemble buffer: {}", e))?;
 
@@ -68,13 +70,13 @@ impl RiscvDisassembler {
         for insn in insns.iter() {
             let mnemonic = insn.mnemonic().unwrap_or("<unknown>");
             let op_str = insn.op_str().unwrap_or("");
-            
+
             let disasm_text = if op_str.is_empty() {
                 mnemonic.to_string()
             } else {
                 format!("{} {}", mnemonic, op_str)
             };
-            
+
             result.push(disasm_text);
         }
 
@@ -82,17 +84,18 @@ impl RiscvDisassembler {
     }
 
     /// 反汇编指令并返回详细信息
-    /// 
+    ///
     /// # 参数
     /// - `code`: 4字节的指令码
     /// - `address`: 指令地址
-    /// 
+    ///
     /// # 返回
     /// 返回包含地址、机器码和反汇编文本的格式化字符串
     pub fn disasm_with_details(&self, code: u32, address: u64) -> Result<String> {
         let code_bytes = code.to_le_bytes();
-        
-        let insns = self.cs
+
+        let insns = self
+            .cs
             .disasm_all(&code_bytes, address)
             .map_err(|e| anyhow!("Failed to disassemble: {}", e))?;
 
@@ -103,14 +106,17 @@ impl RiscvDisassembler {
         let insn = &insns[0];
         let mnemonic = insn.mnemonic().unwrap_or("<unknown>");
         let op_str = insn.op_str().unwrap_or("");
-        
+
         let disasm_text = if op_str.is_empty() {
             mnemonic.to_string()
         } else {
             format!("{} {}", mnemonic, op_str)
         };
 
-        Ok(format!("0x{:016x}: {:08x}    {}", address, code, disasm_text))
+        Ok(format!(
+            "0x{:016x}: {:08x}    {}",
+            address, code, disasm_text
+        ))
     }
 }
 
@@ -140,7 +146,7 @@ mod tests {
         println!("NOP: {}", result);
 
         // 测试 addi x1, x0, 42
-        let addi_code = 0x02a00093; 
+        let addi_code = 0x02a00093;
         let result = disasm.disasm_instruction(addi_code, 0x1004).unwrap();
         println!("ADDI: {}", result);
 
@@ -180,7 +186,7 @@ mod tests {
     #[test]
     fn test_convenience_functions() {
         let nop_code = 0x00000013;
-        
+
         let simple = disasm_riscv64_instruction(nop_code, 0x1000).unwrap();
         println!("Simple: {}", simple);
 

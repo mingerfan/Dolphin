@@ -1,0 +1,16 @@
+[memory]
+memory_base = 0x8000_0000
+memory_size = 128
+boot_pc = 0x8000_0000
+
+[inst_set]
+m_ext = false
+a_ext = false
+c_ext = false
+
+[debug]
+event_list_size = 64
+instruction_tracer_list_size = 64
+
+[others]
+decoder_lru_cache_size = 1024

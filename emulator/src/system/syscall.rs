@@ -1,6 +1,6 @@
 use super::memory::Memory;
-use thiserror::Error;
 use std::io::{self, Write};
+use thiserror::Error;
 
 /// 系统调用错误
 #[derive(Debug, Error)]
@@ -50,40 +50,40 @@ pub fn handle_syscall(ctx: SyscallContext, memory: &mut Memory) -> Result<u64, S
             // 程序退出
             std::process::exit(ctx.arg0 as i32);
         }
-        
+
         syscall_num::SYS_WRITE => {
             // 写入文件
             let fd = ctx.arg0;
             let buf_ptr = ctx.arg1;
             let count = ctx.arg2;
-            
+
             // 只支持标准输出和标准错误
             if fd != 1 && fd != 2 {
                 return Err(SyscallError::InvalidArgument(format!(
-                    "不支持的文件描述符: {}", fd
+                    "不支持的文件描述符: {}",
+                    fd
                 )));
             }
-            
+
             // 读取内存中的数据
             let data = memory.read(buf_ptr, count as usize)?;
-            
+
             // 写入到对应的输出
             if fd == 1 {
                 io::stdout().write_all(&data)
             } else {
                 io::stderr().write_all(&data)
-            }.map_err(|e| {
-                SyscallError::InvalidArgument(format!("输出写入失败: {}", e))
-            })?;
-            
+            }
+            .map_err(|e| SyscallError::InvalidArgument(format!("输出写入失败: {}", e)))?;
+
             Ok(count)
         }
-        
+
         syscall_num::SYS_BRK => {
             // 简单返回，不实际分配内存
             Ok(ctx.arg0)
         }
-        
+
         _ => Err(SyscallError::Unimplemented(ctx.number)),
     }
 }

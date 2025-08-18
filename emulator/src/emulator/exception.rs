@@ -9,16 +9,16 @@ pub enum Exception {
 
     #[error("访问错误: {addr:#x}")]
     AccessFault { addr: u64 },
-    
+
     #[error("指令错误: {addr:#x}")]
     InstructionFault { addr: u64 },
-    
+
     #[error("非法指令: {instruction:#x} at {addr:#x}")]
     IllegalInstruction { instruction: u32, addr: u64 },
-    
+
     #[error("环境调用")]
     EnvironmentCall,
-    
+
     #[error("断点")]
     Breakpoint,
 }

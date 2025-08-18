@@ -1,9 +1,9 @@
 //! CPU状态管理
 
 use super::memory::{Memory, MemoryError};
-use crate::utils::disasm::RiscvDisassembler;
+use crate::{const_values::EmuConfig, utils::disasm::RiscvDisassembler};
 use anyhow::Result;
-use std::fmt;
+use std::{fmt, rc::Rc};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -22,8 +22,8 @@ pub enum StateError {
 pub enum ExecMode {
     #[default]
     None, // 无执行模式
-    Step, // 单步执行
-    Continue, // 连续执行
+    Step,                // 单步执行
+    Continue,            // 连续执行
     RangeStep(u64, u64), // 范围单步执行
 }
 
@@ -58,16 +58,19 @@ pub struct State {
     pub csrs: rustc_hash::FxHashMap<u16, u64>,
     // 内存
     pub memory: Memory,
+    // 设置
+    pub config: Rc<EmuConfig>,
 }
 
 impl State {
     /// 创建新的CPU状态
-    pub fn new(memory_size: usize) -> Result<Self> {
+    pub fn new(config: Rc<EmuConfig>) -> Result<Self> {
         Ok(Self {
             registers: [0; 32],
-            pc: 0x80000000,
+            pc: config.memory.boot_pc, // 从配置中获取启动PC
             csrs: rustc_hash::FxHashMap::default(),
-            memory: Memory::new(memory_size)?,
+            memory: Memory::new(config.clone())?,
+            config,
         })
     }
 
@@ -86,8 +89,7 @@ impl State {
     /// 取指令
     #[inline(always)]
     pub fn fetch_instruction(&self, pc: u64) -> Result<u32> {
-        let bytes = self
-            .read_memory(pc, 4)?;
+        let bytes = self.read_memory(pc, 4)?;
         Ok(bytes
             .try_into()
             .map(u32::from_le_bytes)
@@ -158,38 +160,38 @@ impl State {
 /// RISC-V寄存器别名
 fn get_register_alias(reg: usize) -> &'static str {
     match reg {
-        0 => "zero",   // Hard-wired zero
-        1 => "ra",     // Return address
-        2 => "sp",     // Stack pointer
-        3 => "gp",     // Global pointer
-        4 => "tp",     // Thread pointer
-        5 => "t0",     // Temporary
-        6 => "t1",     // Temporary
-        7 => "t2",     // Temporary
-        8 => "s0/fp",  // Saved register/frame pointer
-        9 => "s1",     // Saved register
-        10 => "a0",    // Function argument/return value
-        11 => "a1",    // Function argument/return value
-        12 => "a2",    // Function argument
-        13 => "a3",    // Function argument
-        14 => "a4",    // Function argument
-        15 => "a5",    // Function argument
-        16 => "a6",    // Function argument
-        17 => "a7",    // Function argument
-        18 => "s2",    // Saved register
-        19 => "s3",    // Saved register
-        20 => "s4",    // Saved register
-        21 => "s5",    // Saved register
-        22 => "s6",    // Saved register
-        23 => "s7",    // Saved register
-        24 => "s8",    // Saved register
-        25 => "s9",    // Saved register
-        26 => "s10",   // Saved register
-        27 => "s11",   // Saved register
-        28 => "t3",    // Temporary
-        29 => "t4",    // Temporary
-        30 => "t5",    // Temporary
-        31 => "t6",    // Temporary
+        0 => "zero",  // Hard-wired zero
+        1 => "ra",    // Return address
+        2 => "sp",    // Stack pointer
+        3 => "gp",    // Global pointer
+        4 => "tp",    // Thread pointer
+        5 => "t0",    // Temporary
+        6 => "t1",    // Temporary
+        7 => "t2",    // Temporary
+        8 => "s0/fp", // Saved register/frame pointer
+        9 => "s1",    // Saved register
+        10 => "a0",   // Function argument/return value
+        11 => "a1",   // Function argument/return value
+        12 => "a2",   // Function argument
+        13 => "a3",   // Function argument
+        14 => "a4",   // Function argument
+        15 => "a5",   // Function argument
+        16 => "a6",   // Function argument
+        17 => "a7",   // Function argument
+        18 => "s2",   // Saved register
+        19 => "s3",   // Saved register
+        20 => "s4",   // Saved register
+        21 => "s5",   // Saved register
+        22 => "s6",   // Saved register
+        23 => "s7",   // Saved register
+        24 => "s8",   // Saved register
+        25 => "s9",   // Saved register
+        26 => "s10",  // Saved register
+        27 => "s11",  // Saved register
+        28 => "t3",   // Temporary
+        29 => "t4",   // Temporary
+        30 => "t5",   // Temporary
+        31 => "t6",   // Temporary
         _ => "unknown",
     }
 }
@@ -226,25 +228,32 @@ impl fmt::Display for State {
 
         for i in 0..instruction_count {
             let addr = start_addr + (i * 4) as u64;
-            
+
             // 检查是否越界
             match self.read_memory(addr, 4) {
                 Ok(bytes) => {
                     if bytes.len() == 4 {
-                        let instruction = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-                        
+                        let instruction =
+                            u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+
                         // 标记当前PC
                         let marker = if addr == self.pc { " <-- PC" } else { "" };
-                        
+
                         // 反汇编指令
                         match disasm.disasm_instruction(instruction, addr) {
                             Ok(disasm_text) => {
-                                writeln!(f, "  0x{:016x}: {:08x}    {}{}", 
-                                        addr, instruction, disasm_text, marker)?;
+                                writeln!(
+                                    f,
+                                    "  0x{:016x}: {:08x}    {}{}",
+                                    addr, instruction, disasm_text, marker
+                                )?;
                             }
                             Err(_) => {
-                                writeln!(f, "  0x{:016x}: {:08x}    <invalid>{}", 
-                                        addr, instruction, marker)?;
+                                writeln!(
+                                    f,
+                                    "  0x{:016x}: {:08x}    <invalid>{}",
+                                    addr, instruction, marker
+                                )?;
                             }
                         }
                     } else {

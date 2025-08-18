@@ -648,7 +648,12 @@ pub const RV_I: &[Instruction] = &[
         execute: |emu: &mut Emulator, inst: u32, _pc: u64| {
             let s = parse_format_s(inst);
             let addr = emu.get_reg(s.rs1)?.wrapping_add(s.imm);
-            tracing::info!("lhs: 0x{:x}, s.imm: 0x{:x}, addr: 0x{:x}", emu.get_reg(s.rs1)?, s.imm, addr);
+            tracing::info!(
+                "lhs: 0x{:x}, s.imm: 0x{:x}, addr: 0x{:x}",
+                emu.get_reg(s.rs1)?,
+                s.imm,
+                addr
+            );
             let value = emu.get_reg(s.rs2)?;
             emu.state.memory.write_doubleword(addr, value)?;
             Ok(())

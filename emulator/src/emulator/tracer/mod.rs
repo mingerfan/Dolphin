@@ -49,7 +49,6 @@ pub fn global_get_log() -> Option<String> {
         None => {
             tracing::warn!("全局追踪器未初始化，请先调用 init_global_tracer");
         }
-        
     };
     None
 }

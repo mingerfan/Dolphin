@@ -28,9 +28,10 @@ impl Memory {
 
     /// 检查地址是否有效
     fn check_bounds(&self, addr: u64, size: usize) -> Result<(), MemoryError> {
-        let end = addr.checked_add(size as u64)
+        let end = addr
+            .checked_add(size as u64)
             .ok_or(MemoryError::OutOfBounds { addr, size })?;
-            
+
         if end > self.data.len() as u64 {
             return Err(MemoryError::OutOfBounds { addr, size });
         }
