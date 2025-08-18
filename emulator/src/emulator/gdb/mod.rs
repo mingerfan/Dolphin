@@ -184,7 +184,8 @@ impl SingleThreadBase for Emulator {
         &mut self,
         regs: &<Self::Arch as gdbstub::arch::Arch>::Registers,
     ) -> target::TargetResult<(), Self> {
-        self.state.set_pc(regs.pc);
+        self.state.set_npc(regs.pc);
+        self.state.sync_pc();
         for (i, &val) in regs.x.iter().enumerate() {
             self.state
                 .set_reg(i, val)
@@ -266,7 +267,8 @@ impl SingleRegisterAccess<()> for Emulator {
             RiscvRegId::Pc => {
                 let pc =
                     u64::from_le_bytes(val.try_into().map_err(|_| target::TargetError::NonFatal)?);
-                self.state.set_pc(pc);
+                self.state.set_npc(pc);
+                self.state.sync_pc();
                 Ok(())
             }
             RiscvRegId::Gpr(reg) => {

@@ -43,7 +43,7 @@ pub fn load_elf(state: &mut State, path: &str) -> Result<()> {
     }
 
     // 设置程序入口点
-    state.set_pc(elf_file.entry());
+    state.set_npc(elf_file.entry());
 
     Ok(())
 }

@@ -54,6 +54,8 @@ pub struct State {
     pub registers: [u64; 32],
     // 程序计数器
     pub pc: u64,
+    // npc
+    pub npc: u64,
     // CSR寄存器
     pub csrs: rustc_hash::FxHashMap<u16, u64>,
     // 内存
@@ -66,6 +68,7 @@ impl State {
         Ok(Self {
             registers: [0; 32],
             pc: 0x80000000,
+            npc: 0x80000000,
             csrs: rustc_hash::FxHashMap::default(),
             memory: Memory::new(memory_size)?,
         })
@@ -132,10 +135,20 @@ impl State {
         self.pc
     }
 
+    #[inline(always)]
+    pub fn get_npc(&self) -> u64 {
+        self.npc
+    }
+
     /// 设置PC值
     #[inline(always)]
-    pub fn set_pc(&mut self, value: u64) {
-        self.pc = value;
+    pub fn set_npc(&mut self, value: u64) {
+        self.npc = value;
+    }
+
+    #[inline(always)]
+    pub fn sync_pc(&mut self) {
+        self.pc = self.npc;
     }
 
     /// 获取CSR值
@@ -226,24 +239,24 @@ impl fmt::Display for State {
 
         for i in 0..instruction_count {
             let addr = start_addr + (i * 4) as u64;
-            
+
             // 检查是否越界
             match self.read_memory(addr, 4) {
                 Ok(bytes) => {
                     if bytes.len() == 4 {
                         let instruction = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-                        
+
                         // 标记当前PC
                         let marker = if addr == self.pc { " <-- PC" } else { "" };
-                        
+
                         // 反汇编指令
                         match disasm.disasm_instruction(instruction, addr) {
                             Ok(disasm_text) => {
-                                writeln!(f, "  0x{:016x}: {:08x}    {}{}", 
+                                writeln!(f, "  0x{:016x}: {:08x}    {}{}",
                                         addr, instruction, disasm_text, marker)?;
                             }
                             Err(_) => {
-                                writeln!(f, "  0x{:016x}: {:08x}    <invalid>{}", 
+                                writeln!(f, "  0x{:016x}: {:08x}    <invalid>{}",
                                         addr, instruction, marker)?;
                             }
                         }

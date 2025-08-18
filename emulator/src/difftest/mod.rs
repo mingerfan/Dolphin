@@ -62,7 +62,8 @@ impl Difftest for Emulator {
     }
 
     fn set_pc(&mut self, pc: u64) {
-        self.set_pc(pc);
+        self.set_npc(pc);
+        self.sync_pc();
     }
 
     fn get_mem(&mut self, addr: u64, size: usize) -> u64 {

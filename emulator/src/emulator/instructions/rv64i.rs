@@ -34,7 +34,7 @@ pub const RV_I: &[Instruction] = &[
                 emu.execption = Some(InstructionAddressMisaligned { addr: target });
                 return Ok(());
             }
-            emu.set_pc(target);
+            emu.set_npc(target);
             Ok(())
         },
     },
@@ -49,7 +49,7 @@ pub const RV_I: &[Instruction] = &[
                 emu.execption = Some(InstructionAddressMisaligned { addr: target });
                 return Ok(());
             }
-            emu.set_pc(target);
+            emu.set_npc(target);
             emu.set_reg(i.rd, pc.wrapping_add(4))
         },
     },
@@ -67,7 +67,7 @@ pub const RV_I: &[Instruction] = &[
                     emu.execption = Some(InstructionAddressMisaligned { addr: target });
                     return Ok(());
                 }
-                emu.set_pc(target);
+                emu.set_npc(target);
             }
             Ok(())
         },
@@ -86,7 +86,7 @@ pub const RV_I: &[Instruction] = &[
                     emu.execption = Some(InstructionAddressMisaligned { addr: target });
                     return Ok(());
                 }
-                emu.set_pc(target);
+                emu.set_npc(target);
             }
             Ok(())
         },
@@ -105,7 +105,7 @@ pub const RV_I: &[Instruction] = &[
                     emu.execption = Some(InstructionAddressMisaligned { addr: target });
                     return Ok(());
                 }
-                emu.set_pc(target);
+                emu.set_npc(target);
             }
             Ok(())
         },
@@ -124,7 +124,7 @@ pub const RV_I: &[Instruction] = &[
                     emu.execption = Some(InstructionAddressMisaligned { addr: target });
                     return Ok(());
                 }
-                emu.set_pc(target);
+                emu.set_npc(target);
             }
             Ok(())
         },
@@ -143,7 +143,7 @@ pub const RV_I: &[Instruction] = &[
                     emu.execption = Some(InstructionAddressMisaligned { addr: target });
                     return Ok(());
                 }
-                emu.set_pc(target);
+                emu.set_npc(target);
             }
             Ok(())
         },
@@ -162,7 +162,7 @@ pub const RV_I: &[Instruction] = &[
                     emu.execption = Some(InstructionAddressMisaligned { addr: target });
                     return Ok(());
                 }
-                emu.set_pc(target);
+                emu.set_npc(target);
             }
             Ok(())
         },
@@ -272,7 +272,7 @@ pub const RV_I: &[Instruction] = &[
         execute: |emu: &mut Emulator, inst: u32, _pc: u64| {
             let i = parse_format_i(inst);
             let lhs = emu.get_reg(i.rs1)?;
-            tracing::info!("i.rs1: {}, i.imm: 0x{:x}", i.rs1, i.imm);
+            tracing::info!("i.rs1: {}, i.imm: 0x{:x}, origin: 0x{:x}", i.rs1, i.imm, lhs);
             emu.set_reg(i.rd, lhs.wrapping_add(i.imm))
         },
     },

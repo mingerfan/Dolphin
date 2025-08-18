@@ -1,12 +1,7 @@
 int main() {
-    int a = 40;
-    int b = 2;
-    int c = a + b;  // Should be 42
-    
-    while(1) {
-        // Infinite loop to keep program running
-        c = c + 1;
+    int sum = 0;
+    for (int i = 1; i <= 100; ++i) {
+        sum += i;
     }
-    
-    return c;
+    asm volatile("mv a0, %0; ebreak" : :"r"(0));
 }

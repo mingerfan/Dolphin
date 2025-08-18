@@ -117,6 +117,7 @@ impl Emulator {
     fn step_internal(&mut self) -> Result<()> {
         // 获取PC和指令
         let (pc, instruction) = {
+            self.state.sync_pc();
             let pc = self.state.get_pc();
             let instruction = self
                 .state
@@ -147,10 +148,10 @@ impl Emulator {
 
         if is_compressed(instruction) {
             // 如果是压缩指令，PC需要加2
-            self.state.set_pc(pc + 2);
+            self.state.set_npc(pc + 2);
         } else {
             // 否则PC加4
-            self.state.set_pc(pc + 4);
+            self.state.set_npc(pc + 4);
         }
 
         (inst.execute)(self, instruction, pc).with_context(|| {
@@ -185,7 +186,7 @@ impl Emulator {
         }
 
         #[cfg(feature = "difftest")] // 条件编译 DiffTest 相关
-        {
+        if self.event != Event::Halted {
             use crate::difftest::Difftest;
             tracing::info!("check diff");
 
@@ -297,8 +298,13 @@ impl Emulator {
     }
 
     #[inline(always)]
-    pub fn set_pc(&mut self, pc: u64) {
-        self.state.set_pc(pc)
+    pub fn set_npc(&mut self, pc: u64) {
+        self.state.set_npc(pc)
+    }
+
+    #[inline(always)]
+    pub fn sync_pc(&mut self) {
+        self.state.sync_pc()
     }
 
     #[inline(always)]
