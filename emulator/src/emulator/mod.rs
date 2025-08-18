@@ -10,6 +10,7 @@ pub mod gdb;
 pub mod tracer;
 
 mod memory;
+mod device_manager;
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -272,11 +273,6 @@ impl Emulator {
     }
 
     /// 获取处理器状态引用
-    #[inline(always)]
-    pub fn get_state(&self) -> State {
-        self.state.clone()
-    }
-
     #[inline(always)]
     pub fn get_state_ref(&self) -> &State {
         &self.state

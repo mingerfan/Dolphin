@@ -48,7 +48,7 @@ pub enum Event {
 }
 
 /// CPU状态
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct State {
     // 通用寄存器
     pub registers: [u64; 32],
@@ -67,12 +67,18 @@ pub struct State {
 impl State {
     /// 创建新的CPU状态
     pub fn new(config: Rc<EmuConfig>) -> Result<Self> {
+        let mut memory = Memory::new(config.clone())?;
+        
+        // 初始化设备
+        super::device_manager::DeviceManager::initialize_devices(&mut memory, &config.devices)
+            .map_err(|e| anyhow::anyhow!("设备初始化失败: {}", e))?;
+
         Ok(Self {
             registers: [0; 32],
             pc: config.memory.boot_pc,
             npc: config.memory.boot_pc,
             csrs: rustc_hash::FxHashMap::default(),
-            memory: Memory::new(config.clone())?,
+            memory,
             config
         })
     }

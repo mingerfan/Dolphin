@@ -43,12 +43,29 @@ pub struct OthersConfig {
     pub decoder_lru_cache_size: usize,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct DeviceConfig {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub device_type: String,
+    pub base: u64,
+    pub size: u64,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Deserialize, Debug)]
 pub struct EmuConfig {
     pub memory: MemoryConfig,
     pub inst_set: InstSetConfig,
     pub debug: DebugConfig,
     pub others: OthersConfig,
+    #[serde(default)]
+    pub devices: Vec<DeviceConfig>,
 }
 
 impl EmuConfig {

@@ -1,5 +1,5 @@
 //! ELF文件加载器
-
+#[cfg(feature = "difftest")]
 use crate::difftest::Difftest;
 use crate::emulator::State;
 use anyhow::{Context, Result, anyhow};
@@ -49,6 +49,7 @@ pub fn load_elf(state: &mut State, path: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "difftest")]
 pub fn load_elf_diff(state: &mut CpuCore, path: &str) -> Result<()> {
     // 读取ELF文件
     let elf_data = fs::read(path).with_context(|| format!("无法读取ELF文件 '{}'", path))?;
