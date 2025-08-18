@@ -41,7 +41,7 @@ pub enum ExecState {
 pub enum Event {
     #[default]
     None,
-    Halted,
+    Halted(u8),
     Break,
     WatchWrite(u64),
     WatchRead(u64),

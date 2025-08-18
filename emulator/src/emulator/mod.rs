@@ -176,8 +176,16 @@ impl Emulator {
             )
         })?;
 
-        if self.event == Event::Halted {
+        if let Event::Halted(x) = self.event {
+            use colored::Colorize;
             self.exec_state = ExecState::End; // 结束执行状态
+            if x != 0 {
+                tracing::error!("程序不正确退出，退出码：{x}");
+                println!("{}", "HIT AT BAD TRAP".red());
+                return Err(anyhow::anyhow!("程序不正确退出，退出码：{x}"));
+            } else {
+                println!("{}", "HIT AT GOOD TRAP".green());
+            }
         }
         #[cfg(feature = "tracer")] // 条件编译追踪器相关
         tracer::global_trace(self);
@@ -199,7 +207,7 @@ impl Emulator {
         }
 
         #[cfg(feature = "difftest")] // 条件编译 DiffTest 相关
-        if self.event != Event::Halted {
+        if let Event::Halted(_) = self.event {
             use crate::difftest::Difftest;
             tracing::info!("check diff");
 

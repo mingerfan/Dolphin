@@ -80,9 +80,9 @@ impl run_blocking::BlockingEventLoop for EmuGdbEventLoop {
             match target.step() {
                 Ok(_) => match target.event {
                     Event::None => (),
-                    Event::Halted => {
+                    Event::Halted(x) => {
                         return Ok(run_blocking::Event::TargetStopped(
-                            SingleThreadStopReason::Exited(0),
+                            SingleThreadStopReason::Exited(x),
                         ));
                     }
                     Event::Break => {

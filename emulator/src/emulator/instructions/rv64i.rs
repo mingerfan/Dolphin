@@ -501,7 +501,7 @@ pub const RV_I: &[Instruction] = &[
         identifier: MATCH_EBREAK,
         name: "ebreak",
         execute: |emu: &mut Emulator, _inst: u32, _pc: u64| {
-            emu.event = Event::Halted;
+            emu.event = Event::Halted(emu.get_reg(10)? as u8);
             tracing::info!("执行 EBREAK 指令, 触发 CPU 停止事件");
             Ok(())
         },

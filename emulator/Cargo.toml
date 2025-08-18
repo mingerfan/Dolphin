@@ -38,6 +38,7 @@ capstone = "0.12"
 rv64emu = "0.1.1"
 hashlink = "0.10.0"
 serde = { version = "1.0.219", features = ["derive"] }
+colored = "3.0.0"
 
 [features]
 gdb = ["gdbstub", "gdbstub_arch"]  # 新增 GDB 特性
