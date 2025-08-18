@@ -1,7 +1,5 @@
 mod breakpoints;
 
-use std::collections::HashSet;
-use nohash_hasher::{self, BuildNoHashHasher};
 use crate::emulator::Emulator;
 use anyhow::Result;
 use gdbstub::target::ext::base::single_register_access::SingleRegisterAccess;
@@ -10,14 +8,16 @@ use gdbstub::target::ext::base::singlethread::{
 };
 use gdbstub::target::{self, Target};
 use gdbstub_arch::riscv::reg::id::RiscvRegId;
+use nohash_hasher::{self, BuildNoHashHasher};
+use std::collections::HashSet;
 use std::net::{TcpListener, TcpStream};
 use tracing::info;
 
+use super::state::{Event, ExecMode, ExecState};
 use gdbstub::common::Signal;
 use gdbstub::conn::{Connection, ConnectionExt};
 use gdbstub::stub::{SingleThreadStopReason, run_blocking};
 use gdbstub::target::ext::breakpoints::WatchKind;
-use super::state::{Event, ExecMode, ExecState};
 
 type NoHashHashSet<T> = HashSet<T, BuildNoHashHasher<T>>;
 
@@ -142,7 +142,6 @@ impl run_blocking::BlockingEventLoop for EmuGdbEventLoop {
         Ok(Some(SingleThreadStopReason::Signal(Signal::SIGINT)))
     }
 }
-
 
 pub fn wait_for_tcp(port: u16) -> Result<TcpStream> {
     let sock_addr = format!("localhost:{}", port);

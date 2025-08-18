@@ -4,25 +4,14 @@ mod rv64i;
 mod rv64m;
 
 use anyhow::{Ok, Result};
-use clap::Args;
-use core::panic;
+use std::rc::Rc;
 use hashlink::LruCache;
 use nohash_hasher::{self, BuildNoHashHasher};
 use std::collections::HashMap;
 
-use crate::const_values;
+use crate::const_values::EmuConfig;
 use crate::emulator::Emulator;
 use crate::utils::bit_utils::{BitSlice, sign_extend_64};
-
-#[derive(Args, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct InstDecoderArgs {
-    #[arg(long, default_value_t = false)]
-    enable_m: bool, // 是否启用M扩展
-    #[arg(long, default_value_t = false)]
-    enable_a: bool, // 是否启用A扩展
-    #[arg(long, default_value_t = false)]
-    enable_c: bool, // 是否启用C扩展
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Instruction {
@@ -36,7 +25,8 @@ pub struct InstDecoder {
     cache: LruCache<u32, Instruction, BuildNoHashHasher<u32>>,
     instructions_set: Vec<Instruction>,
     compressed_instructions: Vec<Instruction>,
-    config: InstDecoderArgs,
+    #[allow(unused)]
+    config: Rc<EmuConfig>,
     opcode_map: HashMap<u32, Vec<Instruction>, BuildNoHashHasher<u32>>,
 }
 
@@ -53,9 +43,9 @@ pub fn is_inst_addr_misaligned(pc: u64) -> bool {
 }
 
 impl InstDecoder {
-    pub fn new(args: &InstDecoderArgs) -> Self {
+    pub fn new(config: Rc<EmuConfig>) -> Self {
         let cache = LruCache::with_hasher(
-            const_values::DECODER_LRU_CACHE_SIZE,
+            config.others.decoder_lru_cache_size,
             BuildNoHashHasher::default(),
         );
         let mut instructions_set = vec![];
@@ -64,14 +54,14 @@ impl InstDecoder {
 
         instructions_set.extend_from_slice(rv64i::RV_I);
 
-        if args.enable_m {
+        if config.inst_set.m_ext {
             instructions_set.extend_from_slice(rv64m::RV_M);
         }
-        if args.enable_a {
+        if config.inst_set.a_ext {
             instructions_set.extend_from_slice(rv64a::RV_A);
         }
 
-        if args.enable_c {
+        if config.inst_set.c_ext {
             todo!("Implement compressed instructions");
         }
 
@@ -84,7 +74,7 @@ impl InstDecoder {
             cache,
             instructions_set,
             compressed_instructions,
-            config: *args,
+            config,
             opcode_map,
         }
     }

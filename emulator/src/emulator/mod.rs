@@ -11,6 +11,9 @@ pub mod tracer;
 
 mod memory;
 
+use std::path::PathBuf;
+use std::rc::Rc;
+
 use crate::emulator::instructions::is_compressed;
 use crate::utils::disasm_riscv64_instruction;
 use crate::{const_values, utils::ringbuf::RingBuffer};
@@ -21,7 +24,6 @@ pub use exception::Exception;
 pub use gdb::EmuGdbEventLoop;
 pub use memory::{Memory, MemoryError};
 
-pub use instructions::InstDecoderArgs;
 #[cfg(feature = "difftest")]
 use rv64emu::rv64core::{
     bus::{DeviceType},
@@ -40,6 +42,8 @@ pub struct Emulator {
     execption: Option<Exception>,
     event_list: RingBuffer<Event>,
     decoder: instructions::InstDecoder,
+    #[allow(unused)]
+    config: Rc<const_values::EmuConfig>, // 模拟器配置
     #[cfg(feature = "gdb")] // 条件编译 GDB 相关
     gdb_data: gdb::GdbData,
     #[cfg(feature = "difftest")] // 条件编译 DiffTest 相关
@@ -47,9 +51,17 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    /// 创建新的模拟器实例
-    pub fn new(args: &crate::Args) -> Result<Self> {
-        let state = State::new(args.memory * 1024 * 1024)?;
+        /// 创建新的模拟器实例
+        pub fn new(args: &crate::Args) -> Result<Self> {
+        let prj_base = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let arg_cfg_path = PathBuf::from(&args.config);
+        let config_path = if arg_cfg_path.is_absolute() {
+            arg_cfg_path
+        } else {
+            prj_base.join(&args.config)
+        };
+        let emu_config = Rc::new(const_values::EmuConfig::new(config_path)?);
+        let state = State::new(emu_config.clone())?;
         let exec_mode = if cfg!(feature = "gdb") {
             ExecMode::Continue // 如果启用了GDB，默认执行模式为连续执行
         } else {
@@ -71,13 +83,13 @@ impl Emulator {
             let bus = Rc::new(RefCell::new(bus::Bus::new()));
             let rc_config = Rc::new(ref_config);
             let mut in_core = cpu_core::CpuCoreBuild::new(bus.clone(), rc_config)
-                .with_boot_pc(const_values::MEMORY_BASE)
+                .with_boot_pc(emu_config.memory.boot_pc)
                 .with_smode(false)
                 .build();
-            let mem = rv64emu::device::device_memory::DeviceMemory::new(128 * 1024 * 1024);
+            let mem = rv64emu::device::device_memory::DeviceMemory::new(emu_config.memory.memory_size * 1024 * 1024);
             let device_name = mem.get_name();
             bus.borrow_mut().add_device(DeviceType {
-                start: const_values::MEMORY_BASE,
+                start: emu_config.memory.memory_base,
                 len: mem.size() as u64,
                 instance: Box::new(mem),
                 name: device_name,
@@ -93,8 +105,9 @@ impl Emulator {
             exec_mode,
             event: Event::None,
             execption: None,
-            event_list: RingBuffer::new(const_values::EVENT_LIST_SIZE),
-            decoder: instructions::InstDecoder::new(&args.inst_decoder_args),
+            event_list: RingBuffer::new(emu_config.debug.event_list_size),
+            decoder: instructions::InstDecoder::new(emu_config.clone()),
+            config: emu_config,
             #[cfg(feature = "gdb")] // 条件编译 GDB 相关
             gdb_data: gdb::GdbData::new(),
             #[cfg(feature = "difftest")] // 条件编译 DiffTest 相关
@@ -226,7 +239,6 @@ impl Emulator {
             #[cfg(feature = "difftest")] // 条件编译 DiffTest 相关
             {
                 use crate::difftest::Difftest;
-                tracing::info!("check diff");
 
                 Difftest::step(&mut self.ref_emu);
                 let ref_state = self.ref_emu.self_state();

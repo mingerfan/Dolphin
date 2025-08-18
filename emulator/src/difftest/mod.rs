@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use rv64emu::{self, rv64core::cpu_core::{CpuCore, CpuState}};
+use rv64emu::{
+    self,
+    rv64core::cpu_core::{CpuCore, CpuState},
+};
 
 use crate::emulator::Emulator;
 
@@ -25,9 +28,9 @@ impl Display for DiffState {
     }
 }
 
+#[allow(unused)]
 pub trait Difftest {
     fn init(&mut self);
-    #[allow(unused)]
     fn mode(&self) -> DiffMode;
     fn self_state(&self) -> DiffState;
     fn step(&mut self) -> bool;

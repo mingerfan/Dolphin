@@ -1,9 +1,9 @@
 //! CPU状态管理
 
 use super::memory::{Memory, MemoryError};
-use crate::utils::disasm::RiscvDisassembler;
+use crate::{const_values::EmuConfig, utils::disasm::RiscvDisassembler};
 use anyhow::Result;
-use std::fmt;
+use std::{fmt, rc::Rc};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -60,17 +60,20 @@ pub struct State {
     pub csrs: rustc_hash::FxHashMap<u16, u64>,
     // 内存
     pub memory: Memory,
+    // 设置
+    pub config: Rc<EmuConfig>,
 }
 
 impl State {
     /// 创建新的CPU状态
-    pub fn new(memory_size: usize) -> Result<Self> {
+    pub fn new(config: Rc<EmuConfig>) -> Result<Self> {
         Ok(Self {
             registers: [0; 32],
-            pc: 0x80000000,
-            npc: 0x80000000,
+            pc: config.memory.boot_pc,
+            npc: config.memory.boot_pc,
             csrs: rustc_hash::FxHashMap::default(),
-            memory: Memory::new(memory_size)?,
+            memory: Memory::new(config.clone())?,
+            config
         })
     }
 

@@ -5,15 +5,15 @@ pub trait BitSlice {
     /// Get a single bit at position (0-based, LSB is 0)
     /// Panics if pos >= 64
     fn bit(&self, pos: usize) -> bool;
-    
+
     /// Get a range of bits [start..end) (0-based, LSB is 0)
     /// Panics if range is out of bounds or start > end
     fn bit_range(&self, range: std::ops::Range<usize>) -> u64;
-    
+
     /// Set a single bit at position (0-based, LSB is 0)
     /// Panics if pos >= 64
     fn set_bit(&mut self, pos: usize, value: bool);
-    
+
     /// Set a range of bits [start..end) (0-based, LSB is 0)
     /// Panics if range is out of bounds or start > end
     fn set_bit_range(&mut self, range: std::ops::Range<usize>, value: u64);
@@ -30,7 +30,7 @@ impl BitSlice for u64 {
     fn bit_range(&self, range: std::ops::Range<usize>) -> u64 {
         assert!(range.end <= 64, "Bit range end out of bounds");
         assert!(range.start <= range.end, "Invalid bit range");
-        
+
         if range.start == range.end {
             return 0;
         }
@@ -40,7 +40,7 @@ impl BitSlice for u64 {
         } else {
             (1 << range.end) - 1
         };
-        
+
         (self & mask) >> range.start
     }
 
@@ -58,22 +58,22 @@ impl BitSlice for u64 {
     fn set_bit_range(&mut self, range: std::ops::Range<usize>, value: u64) {
         assert!(range.end <= 64, "Bit range end out of bounds");
         assert!(range.start <= range.end, "Invalid bit range");
-        
+
         let width = range.end - range.start;
         let value_mask = if width == 64 {
             u64::MAX
         } else {
             (1 << width) - 1
         };
-        
+
         assert!(value <= value_mask, "Value too large for bit range");
-        
+
         let mask = if range.end == 64 {
             u64::MAX
         } else {
             (1 << range.end) - 1
         } ^ ((1 << range.start) - 1);
-        
+
         *self = (*self & !mask) | ((value << range.start) & mask);
     }
 }
@@ -152,7 +152,6 @@ pub fn sign_extend_32(value: u64, num_bits: u64) -> u64 {
     // 将符号位移到最高位，然后算术右移，最后扩展到64位
     ((value32 << shift_amount) as i32 >> shift_amount) as u32 as u64
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -304,21 +303,21 @@ mod tests {
     #[test]
     fn test_bit_operations() {
         let mut x = 0u64;
-        
+
         // Test single bit operations
         x.set_bit(3, true);
         assert!(x.bit(3));
         assert_eq!(x, 0b1000);
-        
+
         x.set_bit(3, false);
         assert!(!x.bit(3));
         assert_eq!(x, 0);
-        
+
         // Test bit range operations
         x.set_bit_range(4..8, 0b1010);
         assert_eq!(x.bit_range(4..8), 0b1010);
         assert_eq!(x, 0b10100000);
-        
+
         // Test overlapping ranges
         x.set_bit_range(6..10, 0b1100);
         assert_eq!(x.bit_range(6..10), 0b1100);
@@ -501,7 +500,6 @@ mod tests {
         assert_eq!(sign_extend_64(0xFFFFFFFFFFFFFFFF, 64), 0xFFFFFFFFFFFFFFFF);
         assert_eq!(sign_extend_64(0x0, 64), 0x0);
     }
-
 
     #[test]
     fn test_extreme_values() {

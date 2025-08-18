@@ -1,9 +1,8 @@
 use anyhow::Result;
-use emulator::{Args, build_emu_run_blocking};
 use clap::Parser;
-use tracing::{info, Level};
+use emulator::{Args, build_emu_run_blocking};
+use tracing::{Level, info};
 use tracing_subscriber::{self, EnvFilter, fmt::format::FmtSpan};
-
 
 fn main() -> Result<()> {
     // 初始化日志
@@ -25,7 +24,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     info!(version = env!("CARGO_PKG_VERSION"), "启动RISC-V模拟器");
-    info!(memory_size_mb = args.memory, "配置内存大小");
+    info!(config_path = args.config, "加载配置文件");
 
     build_emu_run_blocking(args)
 }

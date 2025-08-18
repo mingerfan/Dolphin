@@ -11,7 +11,6 @@ use anyhow::Result;
 use clap::Parser;
 use emulator::Emulator;
 use tracing::info;
-use emulator::InstDecoderArgs;
 
 #[cfg(feature = "tracer")]
 use emulator::tracer::TracerArgs;
@@ -35,12 +34,9 @@ pub struct Args {
     #[arg(short, long, default_value = "1234")]
     pub port: u16,
 
-    /// 内存大小 (MB)
-    #[arg(short, long, default_value = "128")]
-    pub memory: usize,
-
-    #[command(flatten)]
-    pub inst_decoder_args: InstDecoderArgs,
+    /// 配置文件地址
+    #[arg(short, long, default_value = "profile/config.toml")]
+    pub config: String,
 
     /// 追踪器参数
     #[cfg(feature = "tracer")]
