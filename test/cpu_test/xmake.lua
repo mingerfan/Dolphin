@@ -16,7 +16,11 @@ add_cflags("-march=rv64i", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles"
 add_asflags("-march=rv64i", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
 add_cflags("-O0", {force = true})
 add_asflags("-O0", {force = true})
-add_ldflags("-Tlinker.ld", {force = true})
+add_ldflags("-T../../runtime/c/linker.ld", {force = true})
+
+add_files("../../runtime/c/start.S")
+add_includedirs("../../runtime/c")
+add_rules("plugin.compile_commands.autoupdate")
 
 -- 设置默认使用 riscv64 工具链
 set_toolchains("riscv64")
@@ -24,17 +28,17 @@ set_toolchains("riscv64")
 -- 定义目标
 target("hello")
     set_kind("binary")
-    add_files("start.S", "hello.c")
+    add_files("hello.c")
     set_targetdir("bin")
 
 target("add")
     set_kind("binary")
-    add_files("start.S", "add.c")
+    add_files("add.c")
     set_targetdir("bin")
 
 target("loop")
     set_kind("binary")
-    add_files("start.S", "loop.c")
+    add_files("loop.c")
     set_targetdir("bin")
 
 -- 自定义任务: cleanriscv64-linux-gnu-objdump

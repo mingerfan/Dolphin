@@ -1,4 +1,4 @@
-// #include <stdio.h>
+#include <dolphin_runtime.h>
 
 int main() {
     int sum = 0;
@@ -6,5 +6,5 @@ int main() {
         sum += i;
         // printf("Current sum from 1 to %d: %d\n", i, sum);
     }
-    asm volatile("mv a0, %0; ebreak" : :"r"(0));
+    ctrap(0);
 }
