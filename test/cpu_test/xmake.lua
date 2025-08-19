@@ -14,7 +14,7 @@ set_policy("check.auto_ignore_flags", false)  -- 强制启用所有编译标志
 set_arch("riscv64")  -- 明确指定目标架构
 
 -- 禁用 xmake 自动添加的架构相关标志
-set_policy("build.across_targets_in_parallel", false)
+set_policy("build.fence", false)
 add_cflags("-march=rv64i", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
 add_asflags("-march=rv64i", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
 add_cflags("-O0", {force = true})
@@ -22,9 +22,21 @@ add_asflags("-O0", {force = true})
 add_ldflags("-T../../runtime/linker.ld", {force = true})
 
 add_files("../../runtime/start.S")
-add_files("../../runtime/c_runtime.c")
+includes("../../runtime")
 add_includedirs("../../runtime")
 add_rules("plugin.compile_commands.autoupdate")
+
+-- 自动注入 rule：为除 dolphin_runtime 本身外的所有 target 添加依赖
+rule("use_dolphin_runtime")
+    on_load(function(target)
+        if target and target:name() ~= "dolphin_runtime" then
+            target:add("deps", "dolphin_runtime")
+        end
+    end)
+rule_end()
+
+-- 启用注入 rule（放在 target 定义之前或全局）
+add_rules("use_dolphin_runtime")
 
 -- 设置默认使用 riscv64 工具链
 set_toolchains("riscv64")
@@ -49,6 +61,7 @@ target("uart")
     set_kind("binary")
     add_files("uart.c")
     set_targetdir("bin")
+
 
 -- 自定义任务: cleanriscv64-linux-gnu-objdump
 task("clean")
@@ -158,7 +171,7 @@ task("test_all")
         local seen = {}
         local uniq = {}
         for _, v in ipairs(targets) do
-            if v and not seen[v] then seen[v] = true table.insert(uniq, v) end
+            if v and not seen[v] and v ~= "dolphin_runtime" then seen[v] = true table.insert(uniq, v) end
         end
         targets = uniq
 
