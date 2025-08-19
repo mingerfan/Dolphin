@@ -285,27 +285,26 @@ task("test_internal")
     end)
 
 task("test")
-    on_run(function(opt)
+    on_run(function()
         import("core.base.option")
         import("core.base.task")
-        
+
         -- If called with parameters (from test_all), use them
         -- Otherwise, get from command line options
         local target, gdb, tracer, no_build
-        if opt then
-            target = opt.target or "hello"
-            gdb = opt.gdb
-            tracer = opt.tracer
-            no_build = opt.no_build
-        else
-            target = option.get("target") or "hello"
-            gdb = option.get("gdb")
-            tracer = option.get("tracer")
-            no_build = option.get("no_build")
-        end
-        
+        target = option.get("target")
+        gdb = option.get("gdb")
+        tracer = option.get("tracer")
+        no_build = option.get("no_build")
+        opt = {
+            target = target,
+            gdb = gdb,
+            tracer = tracer,
+            no_build = no_build
+        }
+
         -- Pass all options to test_internal
-        task.run("test_internal", {target = target, gdb = gdb, tracer = tracer, no_build = no_build})
+        task.run("test_internal", {}, opt)
     end)
 
     set_menu {
@@ -314,6 +313,7 @@ task("test")
         options = {
             {'g', "gdb", "k", nil, "Enable GDB support"},
             {'tr', "tracer", "k", nil, "Enable execution tracer"},
-            {nil, "target", "v", nil, "Target to run (hello/add/loop...)"}
+            {nil, "no_build", "k", nil, "Skip building the target"},
+            {nil, "target", "v", nil, "Target to run (hello/add/loop...)"},
         }
     }

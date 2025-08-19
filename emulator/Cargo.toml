@@ -48,4 +48,4 @@ uart = { path = "../devices/uart" }
 gdb = ["gdbstub", "gdbstub_arch"]  # 新增 GDB 特性
 tracer = []
 difftest = []
-default = []
+default = ["difftest"]

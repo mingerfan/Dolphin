@@ -34,7 +34,7 @@ pub trait Difftest {
     fn mode(&self) -> DiffMode;
     fn self_state(&self) -> DiffState;
     fn step(&mut self) -> bool;
-    fn set_regs(&mut self, regs: [u64; 32]);
+    fn set_regs(&mut self, regs: &[u64; 32]);
     fn set_pc(&mut self, pc: u64);
     fn get_mem(&mut self, addr: u64, size: usize) -> u64;
     fn set_mem(&mut self, addr: u64, data: u64, len: usize);
@@ -58,7 +58,7 @@ impl Difftest for Emulator {
         self.steps(1).is_ok()
     }
 
-    fn set_regs(&mut self, regs: [u64; 32]) {
+    fn set_regs(&mut self, regs: &[u64; 32]) {
         for i in 0..32 {
             let _ = self.set_reg(i, regs[i as usize]);
         }
@@ -108,7 +108,7 @@ impl Difftest for CpuCore {
         true
     }
 
-    fn set_regs(&mut self, regs: [u64; 32]) {
+    fn set_regs(&mut self, regs: &[u64; 32]) {
         for i in 0..32 {
             self.gpr.write(i, regs[i as usize]);
         }

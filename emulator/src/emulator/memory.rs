@@ -1,5 +1,6 @@
 //! 内存管理模块
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -44,6 +45,7 @@ impl std::fmt::Debug for MmioRegion {
 pub struct Memory {
     /// 内存数据
     data: Vec<u8>,
+    #[allow(unused)]
     config: Rc<EmuConfig>,
     /// 主内存基地址（来自设备配置文件）
     memory_base: u64,
@@ -51,6 +53,8 @@ pub struct Memory {
     memory_size: usize,
     /// MMIO 区域列表
     mmio_regions: Vec<MmioRegion>,
+    /// is last mmio
+    is_last_mmio: RefCell<bool>,
 }
 
 impl Memory {
@@ -66,6 +70,7 @@ impl Memory {
             memory_base: device_file.memory.memory_base,
             memory_size: device_file.memory.memory_size * 1024 * 1024,
             mmio_regions: Vec::new(),
+            is_last_mmio: RefCell::new(false),
         })
     }
 
@@ -184,7 +189,9 @@ impl Memory {
         if let Some(region) = self.find_mmio_region(addr) {
             let offset = addr - region.base;
             let mut device = region.device.lock().unwrap();
-            return Ok(device.read(offset, size)?);
+            let res = device.read(offset, size)?;
+            *self.is_last_mmio.borrow_mut() = true;
+            return Ok(res);
         }
 
         Err(MemoryError::OutOfBounds { addr, size })
@@ -205,10 +212,19 @@ impl Memory {
         if let Some(region) = self.find_mmio_region(addr) {
             let offset = addr - region.base;
             let mut device = region.device.lock().unwrap();
-            return Ok(device.write(offset, data)?);
+            device.write(offset, data)?;
+            *self.is_last_mmio.borrow_mut() = true;
+            return Ok(());
         }
 
         Err(MemoryError::OutOfBounds { addr, size: data.len() })
+    }
+
+    #[inline(always)]
+    pub fn is_last_mmio(&self) -> bool {
+        let res = *self.is_last_mmio.borrow();
+        *self.is_last_mmio.borrow_mut() = false;
+        res
     }
 
     /// 读取字节

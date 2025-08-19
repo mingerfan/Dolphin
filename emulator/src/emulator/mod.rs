@@ -9,8 +9,8 @@ pub mod gdb;
 #[cfg(feature = "tracer")] // 条件编译追踪器模块
 pub mod tracer;
 
-mod memory;
 mod device_manager;
+mod memory;
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -26,10 +26,7 @@ pub use gdb::EmuGdbEventLoop;
 pub use memory::{Memory, MemoryError};
 
 #[cfg(feature = "difftest")]
-use rv64emu::rv64core::{
-    bus::{DeviceType},
-    cpu_core::CpuCore
-};
+use rv64emu::rv64core::{bus::DeviceType, cpu_core::CpuCore};
 pub use state::State;
 pub use state::{Event, ExecMode, ExecState};
 
@@ -52,8 +49,8 @@ pub struct Emulator {
 }
 
 impl Emulator {
-        /// 创建新的模拟器实例
-        pub fn new(args: &crate::Args) -> Result<Self> {
+    /// 创建新的模拟器实例
+    pub fn new(args: &crate::Args) -> Result<Self> {
         let prj_base = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let arg_cfg_path = PathBuf::from(&args.config);
         let config_path = if arg_cfg_path.is_absolute() {
@@ -86,7 +83,10 @@ impl Emulator {
         {
             use std::{cell::RefCell, rc::Rc};
 
-            use rv64emu::{device::device_trait::DeviceBase, rv64core::{bus, cpu_core}};
+            use rv64emu::{
+                device::device_trait::DeviceBase,
+                rv64core::{bus, cpu_core},
+            };
 
             use crate::difftest::Difftest;
             let mut ref_config = rv64emu::config::Config::new();
@@ -99,7 +99,9 @@ impl Emulator {
                 .with_boot_pc(emu_config.memory.boot_pc)
                 .with_smode(false)
                 .build();
-            let mem = rv64emu::device::device_memory::DeviceMemory::new(device_file.memory.memory_size * 1024 * 1024);
+            let mem = rv64emu::device::device_memory::DeviceMemory::new(
+                device_file.memory.memory_size * 1024 * 1024,
+            );
             let device_name = mem.get_name();
             bus.borrow_mut().add_device(DeviceType {
                 start: device_file.memory.memory_base,
@@ -220,20 +222,31 @@ impl Emulator {
         }
 
         #[cfg(feature = "difftest")] // 条件编译 DiffTest 相关
-        if let Event::Halted(_) = self.event {
-            use crate::difftest::Difftest;
-            tracing::info!("check diff");
+        match self.event {
+            Event::Halted(_) => (),
+            _ => {
+                if !self.state.memory.is_last_mmio() {
+                    use crate::difftest::Difftest;
+                    tracing::info!("check diff");
 
-            Difftest::step(&mut self.ref_emu);
-            let ref_state = self.ref_emu.self_state();
-            if ref_state != self.self_state() {
-                use anyhow::anyhow;
+                    Difftest::step(&mut self.ref_emu);
+                    let ref_state = self.ref_emu.self_state();
+                    if ref_state != self.self_state() {
+                        use anyhow::anyhow;
 
-                return Err(anyhow!(
-                    "Failed in difftest check, ref state: {}, self state: {}",
-                    ref_state,
-                    self.state
-                ));
+                        return Err(anyhow!(
+                            "Failed in difftest check, ref state: {}, self state: {}",
+                            ref_state,
+                            self.state
+                        ));
+                    }
+                } else {
+                    // 跳过检测，直接同步状态
+
+                    use crate::difftest::Difftest;
+                    self.ref_emu.set_pc(self.state.get_npc());
+                    self.ref_emu.set_regs(&self.self_state().reg);
+                }
             }
         }
 
@@ -258,19 +271,30 @@ impl Emulator {
             }
 
             #[cfg(feature = "difftest")] // 条件编译 DiffTest 相关
-            {
-                use crate::difftest::Difftest;
+            match self.event {
+                Event::Halted(_) => (),
+                _ => {
+                    if !self.state.memory.is_last_mmio() {
+                        use crate::difftest::Difftest;
 
-                Difftest::step(&mut self.ref_emu);
-                let ref_state = self.ref_emu.self_state();
-                if ref_state != self.self_state() {
-                    use anyhow::anyhow;
+                        Difftest::step(&mut self.ref_emu);
+                        let ref_state = self.ref_emu.self_state();
+                        if ref_state != self.self_state() {
+                            use anyhow::anyhow;
 
-                    return Err(anyhow!(
-                        "Failed in difftest check, ref state: {}, self state: {}",
-                        ref_state,
-                        self.state
-                    ));
+                            return Err(anyhow!(
+                                "Failed in difftest check, ref state: {}, self state: {}",
+                                ref_state,
+                                self.state
+                            ));
+                        }
+                    } else {
+                        // 跳过检测，直接同步状态
+
+                        use crate::difftest::Difftest;
+                        self.ref_emu.set_pc(self.state.get_npc());
+                        self.ref_emu.set_regs(&self.self_state().reg);
+                    }
                 }
             }
 
