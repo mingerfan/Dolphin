@@ -15,7 +15,7 @@ toolchain_end()
 set_policy("check.auto_ignore_flags", false)
 set_arch("riscv64")
 set_policy("build.fence", false)
-add_cflags("-march=rv64i", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
+add_cflags("-march=rv64im", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
 add_cflags("-O0", {force = true})
 
 target("dolphin_runtime")

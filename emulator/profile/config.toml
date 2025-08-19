@@ -2,7 +2,7 @@
 boot_pc = 0x8000_0000
 
 [inst_set]
-m_ext = false
+m_ext = true
 a_ext = false
 c_ext = false
 

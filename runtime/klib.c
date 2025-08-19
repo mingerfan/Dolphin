@@ -31,7 +31,7 @@ void *memcpy(void *dst, const void *src, size_t n) {
 void *memmove(void *dst, const void *src, size_t n) {
     unsigned char *d = (unsigned char *)dst;
     const unsigned char *s = (const unsigned char *)src;
-    
+
     if (d < s) {
         // Copy forward
         while (n--) {
@@ -51,7 +51,7 @@ void *memmove(void *dst, const void *src, size_t n) {
 int memcmp(const void *s1, const void *s2, size_t n) {
     const unsigned char *p1 = (const unsigned char *)s1;
     const unsigned char *p2 = (const unsigned char *)s2;
-    
+
     while (n--) {
         if (*p1 != *p2) {
             return *p1 - *p2;
@@ -148,12 +148,12 @@ int abs(int x) {
 int atoi(const char *nptr) {
     int result = 0;
     int sign = 1;
-    
+
     // Skip whitespace
     while (*nptr == ' ' || *nptr == '\t' || *nptr == '\n' || *nptr == '\r') {
         nptr++;
     }
-    
+
     // Handle sign
     if (*nptr == '-') {
         sign = -1;
@@ -161,19 +161,19 @@ int atoi(const char *nptr) {
     } else if (*nptr == '+') {
         nptr++;
     }
-    
+
     // Convert digits
     while (*nptr >= '0' && *nptr <= '9') {
         result = result * 10 + (*nptr - '0');
         nptr++;
     }
-    
-    // return result * sign;
-    int res = 0;
-    for (int i = 0; i < result; i++) {
-        res += sign;
-    }
-    return res;
+
+    return result * sign;
+    // int res = 0;
+    // for (int i = 0; i < result; i++) {
+    //     res += sign;
+    // }
+    // return res;
 }
 
 // ========== stdio.h ==========
@@ -196,11 +196,11 @@ static void putint_impl(long n) {
         putchar_impl('-');
         n = -n;
     }
-    
+
     if (n >= 10) {
         putint_impl(n / 10);
     }
-    
+
     putchar_impl('0' + (n % 10));
 }
 
@@ -228,7 +228,7 @@ static void puthex_impl(unsigned int n) {
 // Simple printf implementation (supports %d, %u, %x, %s, %c, %%)
 int vprintf_impl(const char *format, va_list ap) {
     int count = 0;
-    
+
     while (*format) {
         if (*format == '%') {
             format++;
@@ -280,7 +280,7 @@ int vprintf_impl(const char *format, va_list ap) {
         }
         format++;
     }
-    
+
     return count;
 }
 

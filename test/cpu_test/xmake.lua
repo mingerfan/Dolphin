@@ -15,8 +15,8 @@ set_arch("riscv64")  -- 明确指定目标架构
 
 -- 禁用 xmake 自动添加的架构相关标志
 set_policy("build.fence", false)
-add_cflags("-march=rv64i", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
-add_asflags("-march=rv64i", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
+add_cflags("-march=rv64im", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
+add_asflags("-march=rv64im", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
 add_cflags("-O0", {force = true})
 add_asflags("-O0", {force = true})
 add_ldflags("-T../../runtime/linker.ld", {force = true})
