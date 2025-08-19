@@ -5,9 +5,7 @@
 extern "C" {
 #endif
 
-static inline void ctrap(unsigned char retv) {
-  asm volatile("mv a0, %0; ebreak" : :"r"(retv));
-}
+void ctrap(unsigned char retv);
 
 #ifdef __cplusplus
 }

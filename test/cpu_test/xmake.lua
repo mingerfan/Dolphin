@@ -19,10 +19,11 @@ add_cflags("-march=rv64i", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles"
 add_asflags("-march=rv64i", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
 add_cflags("-O0", {force = true})
 add_asflags("-O0", {force = true})
-add_ldflags("-T../../runtime/c/linker.ld", {force = true})
+add_ldflags("-T../../runtime/linker.ld", {force = true})
 
-add_files("../../runtime/c/start.S")
-add_includedirs("../../runtime/c")
+add_files("../../runtime/start.S")
+add_files("../../runtime/c_runtime.c")
+add_includedirs("../../runtime")
 add_rules("plugin.compile_commands.autoupdate")
 
 -- 设置默认使用 riscv64 工具链
