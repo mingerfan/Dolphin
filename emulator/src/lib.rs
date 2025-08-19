@@ -37,6 +37,10 @@ pub struct Args {
     #[arg(short, long, default_value = "profile/config.toml")]
     pub config: String,
 
+    /// 设备配置文件路径（相对于主配置文件目录解析）
+    #[arg(short = 'd', long, default_value = "../devices/profile/device.toml")]
+    pub device_config: String,
+
     /// 追踪器参数
     #[cfg(feature = "tracer")]
     #[command(flatten)]

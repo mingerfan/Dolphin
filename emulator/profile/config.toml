@@ -1,6 +1,4 @@
 [memory]
-memory_base = 0x8000_0000
-memory_size = 128
 boot_pc = 0x8000_0000
 
 [inst_set]
@@ -14,18 +12,3 @@ instruction_tracer_list_size = 64
 
 [others]
 decoder_lru_cache_size = 1024
-
-# MMIO 设备配置
-[[devices]]
-name = "uart0"
-type = "uart"
-base = 0x1000_0000
-size = 0x100
-enabled = true
-
-[[devices]]
-name = "uart1" 
-type = "uart"
-base = 0x1000_1000
-size = 0x100
-enabled = false

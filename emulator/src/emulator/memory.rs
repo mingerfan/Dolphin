@@ -45,20 +45,23 @@ pub struct Memory {
     /// 内存数据
     data: Vec<u8>,
     config: Rc<EmuConfig>,
+    /// 主内存基地址（来自设备配置文件）
+    memory_base: u64,
     /// MMIO 区域列表
     mmio_regions: Vec<MmioRegion>,
 }
 
 impl Memory {
-    /// 创建新的内存实例
-    pub fn new(config: Rc<EmuConfig>) -> Result<Self, MemoryError> {
-        let size = config.memory.memory_size * 1024 * 1024; // 转换为字节
+    /// 使用主配置和设备配置创建内存实例
+    pub fn new(config: Rc<EmuConfig>, device_file: &crate::const_values::DeviceFile) -> Result<Self, MemoryError> {
+        let size = device_file.memory.memory_size * 1024 * 1024; // 转换为字节
         if !size.is_power_of_two() {
             return Err(MemoryError::OutOfBounds { addr: 0, size });
         }
         Ok(Self {
             data: vec![0; size],
             config,
+            memory_base: device_file.memory.memory_base,
             mmio_regions: Vec::new(),
         })
     }
@@ -115,7 +118,8 @@ impl Memory {
         size: usize,
         alignment: usize,
     ) -> Result<u64, MemoryError> {
-        let real_addr = addr.wrapping_sub(self.config.memory.memory_base);
+        // 使用设备配置中的 memory_base 作为物理内存基地址
+        let real_addr = addr.wrapping_sub(self.memory_base);
 
         if alignment > 1 && real_addr % alignment as u64 != 0 {
             return Err(MemoryError::Misaligned {
@@ -255,11 +259,9 @@ mod tests {
         }
     }
 
-    fn create_test_config() -> Rc<EmuConfig> {
-        Rc::new(EmuConfig {
+    fn create_test_config() -> (Rc<EmuConfig>, crate::const_values::DeviceFile) {
+        let config = Rc::new(EmuConfig {
             memory: MemoryConfig {
-                memory_base: 0x8000_0000,
-                memory_size: 128,
                 boot_pc: 0x8000_0000,
             },
             inst_set: InstSetConfig {
@@ -275,21 +277,30 @@ mod tests {
             others: OthersConfig {
                 decoder_lru_cache_size: 1024,
             },
+        });
+
+        let device_file = crate::const_values::DeviceFile {
+            memory: crate::const_values::DeviceFileMemory {
+                memory_base: 0x8000_0000,
+                memory_size: 128,
+            },
             devices: Vec::new(),
-        })
+        };
+
+        (config, device_file)
     }
 
     #[test]
     fn test_memory_creation() {
-        let config = create_test_config();
-        let memory = Memory::new(config).unwrap();
+        let (config, device_file) = create_test_config();
+        let memory = Memory::new(config, &device_file).unwrap();
         assert_eq!(memory.data.len(), 128 * 1024 * 1024);
     }
 
     #[test]
     fn test_mmio_mapping() {
-        let config = create_test_config();
-        let mut memory = Memory::new(config).unwrap();
+        let (config, device_file) = create_test_config();
+        let mut memory = Memory::new(config, &device_file).unwrap();
         
         let uart = Arc::new(Mutex::new(MockUart::new()));
         let result = memory.map_mmio(0x1000_0000, 0x100, uart, "test_uart".to_string());
@@ -303,8 +314,8 @@ mod tests {
 
     #[test]
     fn test_mmio_overlap_detection() {
-        let config = create_test_config();
-        let mut memory = Memory::new(config).unwrap();
+        let (config, device_file) = create_test_config();
+        let mut memory = Memory::new(config, &device_file).unwrap();
         
         let uart1 = Arc::new(Mutex::new(MockUart::new()));
         memory.map_mmio(0x1000_0000, 0x100, uart1, "uart1".to_string()).unwrap();
@@ -316,8 +327,8 @@ mod tests {
 
     #[test]
     fn test_mmio_read_write() {
-        let config = create_test_config();
-        let mut memory = Memory::new(config).unwrap();
+        let (config, device_file) = create_test_config();
+        let mut memory = Memory::new(config, &device_file).unwrap();
         
         let uart = Arc::new(Mutex::new(MockUart::new()));
         memory.map_mmio(0x1000_0000, 0x100, uart.clone(), "test_uart".to_string()).unwrap();
@@ -338,8 +349,8 @@ mod tests {
 
     #[test]
     fn test_regular_memory_access() {
-        let config = create_test_config();
-        let mut memory = Memory::new(config).unwrap();
+        let (config, device_file) = create_test_config();
+        let mut memory = Memory::new(config, &device_file).unwrap();
         
         // 测试普通内存读写
         let addr = 0x8000_1000;

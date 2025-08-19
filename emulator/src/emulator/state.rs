@@ -66,11 +66,12 @@ pub struct State {
 
 impl State {
     /// 创建新的CPU状态
-    pub fn new(config: Rc<EmuConfig>) -> Result<Self> {
-        let mut memory = Memory::new(config.clone())?;
+    pub fn new(config: Rc<EmuConfig>, device_file: &crate::const_values::DeviceFile) -> Result<Self> {
+        // 使用 device_file 中的 memory 配置创建内存
+        let mut memory = Memory::new(config.clone(), device_file)?;
         
-        // 初始化设备
-        super::device_manager::DeviceManager::initialize_devices(&mut memory, &config.devices)
+        // 初始化设备（从 device_file 中读取设备列表）
+        super::device_manager::DeviceManager::initialize_devices(&mut memory, &device_file.devices)
             .map_err(|e| anyhow::anyhow!("设备初始化失败: {}", e))?;
 
         Ok(Self {

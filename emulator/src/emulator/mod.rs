@@ -61,8 +61,20 @@ impl Emulator {
         } else {
             prj_base.join(&args.config)
         };
-        let emu_config = Rc::new(const_values::EmuConfig::new(config_path)?);
-        let state = State::new(emu_config.clone())?;
+        // 解析主配置
+        let emu_config = Rc::new(const_values::EmuConfig::new(&config_path)?);
+
+        // 解析设备配置文件（相对于主配置文件目录）
+        let arg_device_path = PathBuf::from(&args.device_config);
+        let device_path = if arg_device_path.is_absolute() {
+            arg_device_path
+        } else {
+            prj_base.join(&args.device_config)
+        };
+        let device_file = const_values::DeviceFile::new(&device_path)?;
+
+        // 使用主配置和设备配置创建状态
+        let state = State::new(emu_config.clone(), &device_file)?;
         let exec_mode = if cfg!(feature = "gdb") {
             ExecMode::Continue // 如果启用了GDB，默认执行模式为连续执行
         } else {
@@ -87,10 +99,10 @@ impl Emulator {
                 .with_boot_pc(emu_config.memory.boot_pc)
                 .with_smode(false)
                 .build();
-            let mem = rv64emu::device::device_memory::DeviceMemory::new(emu_config.memory.memory_size * 1024 * 1024);
+            let mem = rv64emu::device::device_memory::DeviceMemory::new(device_file.memory.memory_size * 1024 * 1024);
             let device_name = mem.get_name();
             bus.borrow_mut().add_device(DeviceType {
-                start: emu_config.memory.memory_base,
+                start: device_file.memory.memory_base,
                 len: mem.size() as u64,
                 instance: Box::new(mem),
                 name: device_name,
