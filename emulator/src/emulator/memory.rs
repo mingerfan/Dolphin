@@ -47,6 +47,8 @@ pub struct Memory {
     config: Rc<EmuConfig>,
     /// 主内存基地址（来自设备配置文件）
     memory_base: u64,
+    /// 主内存大小 (来自设备配置文件, 单位: 字节)
+    memory_size: usize,
     /// MMIO 区域列表
     mmio_regions: Vec<MmioRegion>,
 }
@@ -56,12 +58,13 @@ impl Memory {
     pub fn new(config: Rc<EmuConfig>, device_file: &crate::const_values::DeviceFile) -> Result<Self, MemoryError> {
         let size = device_file.memory.memory_size * 1024 * 1024; // 转换为字节
         if !size.is_power_of_two() {
-            return Err(MemoryError::OutOfBounds { addr: 0, size });
+            return Err(MemoryError::Misaligned { addr: 0, alignment: 2 });
         }
         Ok(Self {
             data: vec![0; size],
             config,
             memory_base: device_file.memory.memory_base,
+            memory_size: device_file.memory.memory_size * 1024 * 1024,
             mmio_regions: Vec::new(),
         })
     }
@@ -74,14 +77,19 @@ impl Memory {
         device: Arc<Mutex<dyn MmioDevice>>,
         name: String,
     ) -> Result<(), MemoryError> {
+        let new_end = base + size;
+
         // 检查地址重叠
         for region in &self.mmio_regions {
             let region_end = region.base + region.size;
-            let new_end = base + size;
-            
+
             if base < region_end && new_end > region.base {
                 return Err(MemoryError::MmioOverlap { addr: base });
             }
+        }
+
+        if base < (self.memory_base + self.memory_size as u64) && new_end > self.memory_base {
+            return Err(MemoryError::MmioOverlap { addr: base });
         }
 
         self.mmio_regions.push(MmioRegion {
@@ -94,11 +102,34 @@ impl Memory {
         Ok(())
     }
 
+    /// 排序 MMIO 区域
+    pub fn sort_mmio_regions(&mut self) {
+        self.mmio_regions.sort_by_key(|region| region.base);
+    }
+
     /// 查找覆盖指定地址的 MMIO 区域
+    #[inline(always)]
     fn find_mmio_region(&self, addr: u64) -> Option<&MmioRegion> {
+        // self.mmio_regions
+        //     .iter()
+        //     .find(|region| addr >= region.base && addr < region.base + region.size)
         self.mmio_regions
-            .iter()
-            .find(|region| addr >= region.base && addr < region.base + region.size)
+            .binary_search_by(|region| {
+                let start = region.base;
+                let end = region.base + region.size;
+                if addr < start {
+                    std::cmp::Ordering::Greater
+                } else if addr >= end {
+                    std::cmp::Ordering::Less
+                } else {
+                    std::cmp::Ordering::Equal
+                }
+            }).ok().map(|index| &self.mmio_regions[index])
+    }
+
+    #[inline(always)]
+    pub fn is_mem_region(&self, addr: u64) -> bool {
+        addr >= self.memory_base && addr < self.memory_base + self.memory_size as u64
     }
 
     /// 移除 MMIO 映射
@@ -112,6 +143,7 @@ impl Memory {
     }
 
     /// 转换并检查地址有效性和对齐
+    #[inline(always)]
     fn translate_address(
         &self,
         addr: u64,
@@ -141,6 +173,13 @@ impl Memory {
     /// 读取内存
     #[inline(always)]
     pub fn read(&self, addr: u64, size: usize) -> Result<Vec<u8>, MemoryError> {
+        if self.is_mem_region(addr) {
+            // 普通内存访问
+            let real_addr = self.translate_address(addr, size, 1)?;
+            let start = real_addr as usize;
+            return Ok(self.data[start..start + size].to_vec())
+        }
+
         // 检查是否为 MMIO 访问
         if let Some(region) = self.find_mmio_region(addr) {
             let offset = addr - region.base;
@@ -148,15 +187,20 @@ impl Memory {
             return Ok(device.read(offset, size)?);
         }
 
-        // 普通内存访问
-        let real_addr = self.translate_address(addr, size, 1)?;
-        let start = real_addr as usize;
-        Ok(self.data[start..start + size].to_vec())
+        Err(MemoryError::OutOfBounds { addr, size })
     }
 
     /// 写入内存
     #[inline(always)]
     pub fn write(&mut self, addr: u64, data: &[u8]) -> Result<(), MemoryError> {
+        if self.is_mem_region(addr) {
+            // 普通内存访问
+            let real_addr = self.translate_address(addr, data.len(), 1)?;
+            let start = real_addr as usize;
+            self.data[start..start + data.len()].copy_from_slice(data);
+            return Ok(())
+        }
+
         // 检查是否为 MMIO 访问
         if let Some(region) = self.find_mmio_region(addr) {
             let offset = addr - region.base;
@@ -164,11 +208,7 @@ impl Memory {
             return Ok(device.write(offset, data)?);
         }
 
-        // 普通内存访问
-        let real_addr = self.translate_address(addr, data.len(), 1)?;
-        let start = real_addr as usize;
-        self.data[start..start + data.len()].copy_from_slice(data);
-        Ok(())
+        Err(MemoryError::OutOfBounds { addr, size: data.len() })
     }
 
     /// 读取字节
@@ -301,11 +341,11 @@ mod tests {
     fn test_mmio_mapping() {
         let (config, device_file) = create_test_config();
         let mut memory = Memory::new(config, &device_file).unwrap();
-        
+
         let uart = Arc::new(Mutex::new(MockUart::new()));
         let result = memory.map_mmio(0x1000_0000, 0x100, uart, "test_uart".to_string());
         assert!(result.is_ok());
-        
+
         assert_eq!(memory.mmio_regions.len(), 1);
         assert_eq!(memory.mmio_regions[0].base, 0x1000_0000);
         assert_eq!(memory.mmio_regions[0].size, 0x100);
@@ -316,10 +356,10 @@ mod tests {
     fn test_mmio_overlap_detection() {
         let (config, device_file) = create_test_config();
         let mut memory = Memory::new(config, &device_file).unwrap();
-        
+
         let uart1 = Arc::new(Mutex::new(MockUart::new()));
         memory.map_mmio(0x1000_0000, 0x100, uart1, "uart1".to_string()).unwrap();
-        
+
         let uart2 = Arc::new(Mutex::new(MockUart::new()));
         let result = memory.map_mmio(0x1000_0050, 0x100, uart2, "uart2".to_string());
         assert!(matches!(result, Err(MemoryError::MmioOverlap { .. })));
@@ -329,18 +369,18 @@ mod tests {
     fn test_mmio_read_write() {
         let (config, device_file) = create_test_config();
         let mut memory = Memory::new(config, &device_file).unwrap();
-        
+
         let uart = Arc::new(Mutex::new(MockUart::new()));
         memory.map_mmio(0x1000_0000, 0x100, uart.clone(), "test_uart".to_string()).unwrap();
-        
+
         // 测试写入
         memory.write_byte(0x1000_0000, b'H').unwrap();
         memory.write_byte(0x1000_0001, b'i').unwrap();
-        
+
         // 验证数据被写入设备
         let device = uart.lock().unwrap();
         assert_eq!(device.data, vec![b'H', b'i']);
-        
+
         // 测试读取
         drop(device);
         let data = memory.read_byte(0x1000_0000).unwrap();
@@ -351,13 +391,13 @@ mod tests {
     fn test_regular_memory_access() {
         let (config, device_file) = create_test_config();
         let mut memory = Memory::new(config, &device_file).unwrap();
-        
+
         // 测试普通内存读写
         let addr = 0x8000_1000;
         memory.write_byte(addr, 0x42).unwrap();
         let data = memory.read_byte(addr).unwrap();
         assert_eq!(data, 0x42);
-        
+
         // 测试多字节访问
         memory.write_word(addr + 4, 0x12345678).unwrap();
         let word = memory.read_word(addr + 4).unwrap();

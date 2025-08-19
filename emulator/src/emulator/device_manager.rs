@@ -60,6 +60,8 @@ impl DeviceManager {
             ).map_err(|e| format!("映射设备 {} 失败: {}", config.name, e))?;
         }
 
+        memory.sort_mmio_regions();
+
         Ok(())
     }
 }
