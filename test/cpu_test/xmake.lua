@@ -62,6 +62,11 @@ target("uart")
     add_files("uart.c")
     set_targetdir("bin")
 
+target("klib_test")
+    set_kind("binary")
+    add_files("klib_test.c")
+    set_targetdir("bin")
+
 
 -- 自定义任务: cleanriscv64-linux-gnu-objdump
 task("clean")
