@@ -48,6 +48,5 @@ int main() {
     
     printf("All klib tests completed!\n");
     
-    halt(0);
-    // return 0;
+    return 0;
 }

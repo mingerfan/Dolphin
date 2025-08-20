@@ -41,31 +41,38 @@ add_rules("use_dolphin_runtime")
 -- 设置默认使用 riscv64 工具链
 set_toolchains("riscv64")
 
--- 定义目标
-target("hello")
-    set_kind("binary")
-    add_files("hello.c")
-    set_targetdir("bin")
+-- 自动为当前目录下的所有 .c 文件创建 targets（以文件名为 target 名称）
+-- 例如 hello.c -> target "hello"
+local c_files = {}
 
-target("add")
-    set_kind("binary")
-    add_files("add.c")
-    set_targetdir("bin")
+-- xmake 提供的文件匹配 API 在不同版本中不同，优先使用 os.files
+if os and os.files then
+    c_files = os.files("*.c") or {}
+end
 
-target("loop")
-    set_kind("binary")
-    add_files("loop.c")
-    set_targetdir("bin")
+-- 回退：如果上面为空，尝试使用 ls 列出 .c 文件（安全地忽略错误）
+if #c_files == 0 then
+    local p = io.popen('ls -1 *.c 2>/dev/null')
+    if p then
+        for line in p:lines() do
+            table.insert(c_files, line)
+        end
+        p:close()
+    end
+end
 
-target("uart")
-    set_kind("binary")
-    add_files("uart.c")
-    set_targetdir("bin")
-
-target("klib_test")
-    set_kind("binary")
-    add_files("klib_test.c")
-    set_targetdir("bin")
+table.sort(c_files)
+for _, f in ipairs(c_files) do
+    local filename = path.filename(f) or f
+    local name = path.basename(filename)
+    if name and name ~= "" and name ~= "dolphin_runtime" then
+        target(name)
+            set_kind("binary")
+            add_files(f)
+            set_targetdir("bin")
+        target_end()
+    end
+end
 
 
 -- 自定义任务: cleanriscv64-linux-gnu-objdump

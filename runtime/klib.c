@@ -129,7 +129,7 @@ int rand(void) {
 void *malloc(size_t size) {
     // Simple bump allocator
     if (heap_pos + size > sizeof(heap)) {
-        return 0; // Out of memory
+        return NULL; // Out of memory
     }
     void *ptr = heap + heap_pos;
     heap_pos += size;
@@ -169,28 +169,23 @@ int atoi(const char *nptr) {
     }
 
     return result * sign;
-    // int res = 0;
-    // for (int i = 0; i < result; i++) {
-    //     res += sign;
-    // }
-    // return res;
 }
 
 // ========== stdio.h ==========
 
-// Helper function to write a character
+// Helper function to write a character to UART
 static void putchar_impl(char c) {
     uart_putc(c);
 }
 
-// Helper function to write a string
+// Helper function to write a string to UART
 static void puts_impl(const char *s) {
     while (*s) {
         putchar_impl(*s++);
     }
 }
 
-// Helper function to write an integer
+// Helper function to write an integer to UART
 static void putint_impl(long n) {
     if (n < 0) {
         putchar_impl('-');
@@ -204,7 +199,7 @@ static void putint_impl(long n) {
     putchar_impl('0' + (n % 10));
 }
 
-// Helper function to write an unsigned integer
+// Helper function to write an unsigned integer to UART
 static void putuint_impl(unsigned long n) {
     if (n >= 10) {
         putuint_impl(n / 10);
@@ -212,7 +207,7 @@ static void putuint_impl(unsigned long n) {
     putchar_impl('0' + (n % 10));
 }
 
-// Helper function to write a hex number
+// Helper function to write a hex number to UART
 static void puthex_impl(unsigned int n) {
     if (n >= 16) {
         puthex_impl(n / 16);
@@ -222,6 +217,63 @@ static void puthex_impl(unsigned int n) {
         putchar_impl('0' + digit);
     } else {
         putchar_impl('a' + digit - 10);
+    }
+}
+
+// String formatting context for sprintf family functions
+struct sprintf_ctx {
+    char *str;
+    size_t size;
+    size_t pos;
+};
+
+// Helper function to write a character to string buffer
+static void putchar_str(struct sprintf_ctx *ctx, char c) {
+    if (ctx->pos < ctx->size - 1) {
+        ctx->str[ctx->pos] = c;
+    }
+    ctx->pos++;
+}
+
+// Helper function to write a string to string buffer
+static void puts_str(struct sprintf_ctx *ctx, const char *s) {
+    while (*s) {
+        putchar_str(ctx, *s++);
+    }
+}
+
+// Helper function to write an integer to string buffer
+static void putint_str(struct sprintf_ctx *ctx, long n) {
+    if (n < 0) {
+        putchar_str(ctx, '-');
+        n = -n;
+    }
+
+    if (n >= 10) {
+        putint_str(ctx, n / 10);
+    }
+
+    putchar_str(ctx, '0' + (n % 10));
+}
+
+// Helper function to write an unsigned integer to string buffer
+static void putuint_str(struct sprintf_ctx *ctx, unsigned long n) {
+    if (n >= 10) {
+        putuint_str(ctx, n / 10);
+    }
+    putchar_str(ctx, '0' + (n % 10));
+}
+
+// Helper function to write a hex number to string buffer
+static void puthex_str(struct sprintf_ctx *ctx, unsigned int n) {
+    if (n >= 16) {
+        puthex_str(ctx, n / 16);
+    }
+    char digit = n % 16;
+    if (digit < 10) {
+        putchar_str(ctx, '0' + digit);
+    } else {
+        putchar_str(ctx, 'a' + digit - 10);
     }
 }
 
@@ -253,7 +305,9 @@ int vprintf_impl(const char *format, va_list ap) {
                 }
                 case 's': {
                     char *s = va_arg(ap, char *);
-                    puts_impl(s);
+                    if (s) {
+                        puts_impl(s);
+                    }
                     count++;
                     break;
                 }
@@ -284,6 +338,67 @@ int vprintf_impl(const char *format, va_list ap) {
     return count;
 }
 
+// String formatting implementation (supports %d, %u, %x, %s, %c, %%)
+static int vsprintf_impl(struct sprintf_ctx *ctx, const char *format, va_list ap) {
+    int count = 0;
+
+    while (*format) {
+        if (*format == '%') {
+            format++;
+            switch (*format) {
+                case 'd': {
+                    int n = va_arg(ap, int);
+                    putint_str(ctx, n);
+                    count++;
+                    break;
+                }
+                case 'u': {
+                    unsigned int n = va_arg(ap, unsigned int);
+                    putuint_str(ctx, n);
+                    count++;
+                    break;
+                }
+                case 'x': {
+                    unsigned int n = va_arg(ap, unsigned int);
+                    puthex_str(ctx, n);
+                    count++;
+                    break;
+                }
+                case 's': {
+                    char *s = va_arg(ap, char *);
+                    if (s) {
+                        puts_str(ctx, s);
+                    }
+                    count++;
+                    break;
+                }
+                case 'c': {
+                    int c = va_arg(ap, int);
+                    putchar_str(ctx, (char)c);
+                    count++;
+                    break;
+                }
+                case '%': {
+                    putchar_str(ctx, '%');
+                    count++;
+                    break;
+                }
+                default:
+                    putchar_str(ctx, '%');
+                    putchar_str(ctx, *format);
+                    count += 2;
+                    break;
+            }
+        } else {
+            putchar_str(ctx, *format);
+            count++;
+        }
+        format++;
+    }
+
+    return count;
+}
+
 int printf(const char *format, ...) {
     va_list ap;
     va_start(ap, format);
@@ -293,9 +408,15 @@ int printf(const char *format, ...) {
 }
 
 int vsprintf(char *str, const char *format, va_list ap) {
-    // For simplicity, we'll implement a basic version that doesn't actually format to string
-    // This would need a more complex implementation for real use
-    return vprintf_impl(format, ap);
+    struct sprintf_ctx ctx = {str, (size_t)-1, 0};  // Use maximum size_t value
+    int result = vsprintf_impl(&ctx, format, ap);
+    
+    // Null terminate the string
+    if (str) {
+        str[ctx.pos] = '\0';
+    }
+    
+    return result;
 }
 
 int sprintf(char *str, const char *format, ...) {
@@ -307,9 +428,26 @@ int sprintf(char *str, const char *format, ...) {
 }
 
 int vsnprintf(char *str, size_t size, const char *format, va_list ap) {
-    // For simplicity, we'll implement a basic version that doesn't actually format to string
-    // This would need a more complex implementation for real use
-    return vprintf_impl(format, ap);
+    if (size == 0) {
+        // Still need to calculate how many characters would be written
+        struct sprintf_ctx ctx = {NULL, 0, 0};
+        return vsprintf_impl(&ctx, format, ap);
+    }
+    
+    struct sprintf_ctx ctx = {str, size, 0};
+    vsprintf_impl(&ctx, format, ap);
+    
+    // Null terminate the string
+    if (str && size > 0) {
+        if (ctx.pos >= size) {
+            str[size - 1] = '\0';
+        } else {
+            str[ctx.pos] = '\0';
+        }
+    }
+    
+    // Return the number of characters that would have been written
+    return (int)ctx.pos;
 }
 
 int snprintf(char *str, size_t size, const char *format, ...) {
@@ -321,9 +459,12 @@ int snprintf(char *str, size_t size, const char *format, ...) {
 }
 
 int puts(const char *s) {
+    if (s == NULL) {
+        return -1; // EOF
+    }
     puts_impl(s);
     putchar_impl('\n');
-    return 1;
+    return 0; // Success (non-negative value)
 }
 
 // ========== assert.h ==========

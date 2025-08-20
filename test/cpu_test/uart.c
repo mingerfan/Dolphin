@@ -6,5 +6,5 @@ int main() {
     uart_puts("Hello from MMIO UART!\n");
     uart_puts("MMIO 功能测试成功！\n");
 
-    ctrap(0);
+    return 0;
 }
