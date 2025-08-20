@@ -21,10 +21,14 @@ pub struct DeviceFactory;
 impl DeviceFactory {
     /// 根据配置创建设备
     pub fn create_device(config: &DeviceConfig) -> Result<Arc<Mutex<dyn MmioDevice>>, DeviceError> {
-        match config.device_type.as_str() {
+            match config.device_type.as_str() {
             "uart" => {
                 let uart = uart::Uart::new(config.name.clone());
                 Ok(Arc::new(Mutex::new(uart)))
+            }
+            "timer" => {
+                let timer = timer::Timer::new(config.name.clone());
+                Ok(Arc::new(Mutex::new(timer)))
             }
             _ => Err(DeviceError::UnknownDeviceType(config.device_type.clone())),
         }

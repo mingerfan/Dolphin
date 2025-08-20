@@ -43,6 +43,7 @@ colored = "3.0.0"
 # MMIO 设备支持
 mmio-trait = { path = "../devices/mmio-trait" }
 uart = { path = "../devices/uart" }
+timer = { path = "../devices/timer" }
 
 [features]
 gdb = ["gdbstub", "gdbstub_arch"]  # 新增 GDB 特性
