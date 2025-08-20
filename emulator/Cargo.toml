@@ -49,4 +49,4 @@ timer = { path = "../devices/timer" }
 gdb = ["gdbstub", "gdbstub_arch"]  # 新增 GDB 特性
 tracer = []
 difftest = []
-default = ["difftest"]
+default = []

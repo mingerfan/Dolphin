@@ -1,9 +1,10 @@
 #ifndef DOLPHIN_UART_H
 #define DOLPHIN_UART_H
 
+#include <device_config.h>
 
 #ifndef UART_BASE
-#define UART_BASE 0x10000000UL
+#define UART_BASE DEVICE_UART0_BASE
 #endif
 
 #define UART_DATA_REG  (UART_BASE + 0x00)

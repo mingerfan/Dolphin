@@ -7,7 +7,7 @@ void uart_init(void) {
 
 void uart_putc(char c) {
     volatile unsigned char *uart_data = (volatile unsigned char *)UART_DATA_REG;
-    *uart_data = (unsigned char)c;
+    *(volatile unsigned char *)uart_data = (unsigned char)c;
 }
 
 void uart_puts(const char *s) {

@@ -4,3 +4,4 @@
 *.xmake
 **/bin
 .zed
+.cache

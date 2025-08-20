@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #ifndef TIMER_BASE
-#define TIMER_BASE 0x10000100UL
+#define TIMER_BASE DEVICE_TIMER0_BASE
 #endif
 
 #define TIMER_CNT0_REG (TIMER_BASE + 0x00)

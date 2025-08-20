@@ -467,6 +467,11 @@ int puts(const char *s) {
     return 0; // Success (non-negative value)
 }
 
+int putchar(int c) {
+    putchar_impl((char)c);
+    return c;
+}
+
 // ========== assert.h ==========
 
 void halt(int code) {

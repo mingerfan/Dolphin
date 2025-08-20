@@ -276,6 +276,7 @@ task("test_internal")
         local gdb = opt.gdb
         local tracer = opt.tracer
         local no_build = opt.no_build
+        local difftest = opt.difftest
 
         import("core.project.task")
         -- os.setenv("CARGO_TERM_QUIET", "true")
@@ -296,13 +297,16 @@ task("test_internal")
             if tracer then
                 table.insert(features, "tracer")
             end
+            if difftest then
+                table.insert(features, "difftest")
+            end
 
             local cmd = "cargo run --release"
             if #features > 0 then
                 cmd = cmd .. " --features " .. table.concat(features, ",")
             end
             cmd = cmd .. " -- -e " .. binary
-
+            print(string.format("Running command: %s", cmd))
             os.exec(cmd)
         else
             raise("Binary not found: " .. binary)
@@ -316,16 +320,18 @@ task("test")
 
         -- If called with parameters (from test_all), use them
         -- Otherwise, get from command line options
-        local target, gdb, tracer, no_build
+        local target, gdb, tracer, difftest, no_build
         target = option.get("target")
         gdb = option.get("gdb")
         tracer = option.get("tracer")
         no_build = option.get("no_build")
+        difftest = option.get("difftest")
         opt = {
             target = target,
             gdb = gdb,
             tracer = tracer,
-            no_build = no_build
+            no_build = no_build,
+            difftest = difftest
         }
 
         -- Pass all options to test_internal
@@ -338,6 +344,7 @@ task("test")
         options = {
             {'g', "gdb", "k", nil, "Enable GDB support"},
             {'tr', "tracer", "k", nil, "Enable execution tracer"},
+            {'d', "difftest", "kv", true, "Enable diff test"},
             {nil, "no_build", "k", nil, "Skip building the target"},
             {nil, "target", "v", nil, "Target to run (hello/add/loop...)"},
         }
