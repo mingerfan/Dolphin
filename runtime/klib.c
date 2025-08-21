@@ -11,6 +11,7 @@ static unsigned int rand_seed = 1;
 
 // ========== string.h ==========
 
+__attribute__((optimize("O0")))
 void *memset(void *s, int c, size_t n) {
     unsigned char *p = (unsigned char *)s;
     while (n--) {
@@ -19,6 +20,7 @@ void *memset(void *s, int c, size_t n) {
     return s;
 }
 
+__attribute__((optimize("O0")))
 void *memcpy(void *dst, const void *src, size_t n) {
     unsigned char *d = (unsigned char *)dst;
     const unsigned char *s = (const unsigned char *)src;
@@ -28,6 +30,7 @@ void *memcpy(void *dst, const void *src, size_t n) {
     return dst;
 }
 
+__attribute__((optimize("O0")))
 void *memmove(void *dst, const void *src, size_t n) {
     unsigned char *d = (unsigned char *)dst;
     const unsigned char *s = (const unsigned char *)src;
@@ -319,14 +322,14 @@ int vprintf_impl(const char *format, va_list ap) {
     while (*format) {
         if (*format == '%') {
             format++;
-            
+
             // Check for 'l' modifier
             int is_long = 0;
             if (*format == 'l') {
                 is_long = 1;
                 format++;
             }
-            
+
             switch (*format) {
                 case 'd': {
                     if (is_long) {
@@ -413,14 +416,14 @@ static int vsprintf_impl(struct sprintf_ctx *ctx, const char *format, va_list ap
     while (*format) {
         if (*format == '%') {
             format++;
-            
+
             // Check for 'l' modifier
             int is_long = 0;
             if (*format == 'l') {
                 is_long = 1;
                 format++;
             }
-            
+
             switch (*format) {
                 case 'd': {
                     if (is_long) {
@@ -511,12 +514,12 @@ int printf(const char *format, ...) {
 int vsprintf(char *str, const char *format, va_list ap) {
     struct sprintf_ctx ctx = {str, (size_t)-1, 0};  // Use maximum size_t value
     int result = vsprintf_impl(&ctx, format, ap);
-    
+
     // Null terminate the string
     if (str) {
         str[ctx.pos] = '\0';
     }
-    
+
     return result;
 }
 
@@ -534,10 +537,10 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap) {
         struct sprintf_ctx ctx = {NULL, 0, 0};
         return vsprintf_impl(&ctx, format, ap);
     }
-    
+
     struct sprintf_ctx ctx = {str, size, 0};
     vsprintf_impl(&ctx, format, ap);
-    
+
     // Null terminate the string
     if (str && size > 0) {
         if (ctx.pos >= size) {
@@ -546,7 +549,7 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap) {
             str[ctx.pos] = '\0';
         }
     }
-    
+
     // Return the number of characters that would have been written
     return (int)ctx.pos;
 }

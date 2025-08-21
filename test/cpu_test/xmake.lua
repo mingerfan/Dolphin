@@ -17,8 +17,8 @@ set_arch("riscv64")  -- 明确指定目标架构
 set_policy("build.fence", false)
 add_cflags("-march=rv64im", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
 add_asflags("-march=rv64im", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
-add_cflags("-O1", {force = true})
-add_asflags("-O1", {force = true})
+add_cflags("-O2", {force = true})
+add_asflags("-O2", {force = true})
 add_ldflags("-T../../runtime/linker.ld", {force = true})
 
 add_files("../../runtime/start.S")
@@ -91,7 +91,7 @@ task("clean")
 task("disasm")
     on_run(function()
         import("core.base.option")
-        local targetname = option.get("target") or "hello"
+        local targetname = option.get("target") or "hello-str"
         local binary = path.join("bin", targetname)
         if os.isfile(binary) then
             os.exec("riscv64-linux-gnu-objdump -d %s", binary)
@@ -101,7 +101,7 @@ task("disasm")
         usage = "xmake disasm",
         description = "Disassemble binaries",
         options = {
-            {nil, "target", "v", nil, "Target to run (hello/add/loop...)"}
+            {nil, "target", "v", nil, "Target to run"}
         }
     }
 
@@ -272,7 +272,7 @@ task("test_internal")
     on_run(function(opt)
         -- Ensure opt is not nil and has default values
         opt = opt or {}
-        local target = opt.target or "hello"
+        local target = opt.target or "hello-str"
         local gdb = opt.gdb
         local tracer = opt.tracer
         local no_build = opt.no_build
@@ -325,7 +325,7 @@ task("test")
         gdb = option.get("gdb")
         tracer = option.get("tracer")
         no_build = option.get("no_build")
-        difftest = option.get("difftest")
+        difftest = option.get("difftest") or true
         opt = {
             target = target,
             gdb = gdb,

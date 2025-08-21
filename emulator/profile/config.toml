@@ -11,4 +11,4 @@ event_list_size = 64
 instruction_tracer_list_size = 64
 
 [others]
-decoder_lru_cache_size = 1024
+decoder_lru_cache_size = 2048

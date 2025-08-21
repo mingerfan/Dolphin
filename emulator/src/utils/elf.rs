@@ -37,6 +37,14 @@ pub fn load_elf(state: &mut State, path: &str) -> Result<()> {
             .data()
             .with_context(|| format!("无法读取节 '{}' 的数据", section_name))?;
 
+        // println!("section name: {}, section start address: 0x{:x}, section len: 0x{:x}", section_name, addr, data.len());
+        // if section_name == ".text" {
+        //     for (i, chunk) in data.chunks(4).enumerate() {
+        //         let instruction = u32::from_le_bytes(chunk.try_into().unwrap());
+        //         println!("instruction 0x{:08x}: 0x{:08x}", i as u64 * 4 + addr, instruction);
+        //     }
+        // }
+
         // 写入内存
         state
             .write_memory(addr, data)
