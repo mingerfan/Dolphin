@@ -17,8 +17,8 @@ set_arch("riscv64")  -- 明确指定目标架构
 set_policy("build.fence", false)
 add_cflags("-march=rv64im", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
 add_asflags("-march=rv64im", "-mabi=lp64", "-static", "-nostdlib", "-nostartfiles", "-g", {force = true})
-add_cflags("-O0", {force = true})
-add_asflags("-O0", {force = true})
+add_cflags("-O1", {force = true})
+add_asflags("-O1", {force = true})
 add_ldflags("-T../../runtime/linker.ld", {force = true})
 
 add_files("../../runtime/start.S")

@@ -25,7 +25,7 @@ pub fn load_elf(state: &mut State, path: &str) -> Result<()> {
         // 跳过非分配节
         if !matches!(
             section.kind(),
-            SectionKind::Text | SectionKind::Data | SectionKind::ReadOnlyData
+            SectionKind::Text | SectionKind::Data | SectionKind::ReadOnlyData | SectionKind::ReadOnlyString
         ) {
             continue;
         }
@@ -66,7 +66,7 @@ pub fn load_elf_diff(state: &mut CpuCore, path: &str) -> Result<()> {
         // 跳过非分配节
         if !matches!(
             section.kind(),
-            SectionKind::Text | SectionKind::Data | SectionKind::ReadOnlyData
+            SectionKind::Text | SectionKind::Data | SectionKind::ReadOnlyData | SectionKind::ReadOnlyString
         ) {
             continue;
         }
