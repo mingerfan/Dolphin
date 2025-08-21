@@ -31,4 +31,9 @@ int main() {
     } else {
         return 1;
     }
+
+    // uint64_t t1 = timer_get_us();
+
+    // while(timer_get_us() - t1 < 5000000);
+
 }

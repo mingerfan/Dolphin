@@ -207,8 +207,8 @@ static void putuint_impl(unsigned long n) {
     putchar_impl('0' + (n % 10));
 }
 
-// Helper function to write a hex number to UART
-static void puthex_impl(unsigned int n) {
+// Helper function to write a hex number to UART (supporting long)
+static void puthex_impl(unsigned long n) {
     if (n >= 16) {
         puthex_impl(n / 16);
     }
@@ -264,8 +264,8 @@ static void putuint_str(struct sprintf_ctx *ctx, unsigned long n) {
     putchar_str(ctx, '0' + (n % 10));
 }
 
-// Helper function to write a hex number to string buffer
-static void puthex_str(struct sprintf_ctx *ctx, unsigned int n) {
+// Helper function to write a hex number to string buffer (supporting long)
+static void puthex_str(struct sprintf_ctx *ctx, unsigned long n) {
     if (n >= 16) {
         puthex_str(ctx, n / 16);
     }
@@ -277,38 +277,99 @@ static void puthex_str(struct sprintf_ctx *ctx, unsigned int n) {
     }
 }
 
-// Simple printf implementation (supports %d, %u, %x, %s, %c, %%)
+// Helper functions to count digits for proper character counting
+static int count_digits_int(long n) {
+    if (n == 0) return 1;
+    int count = 0;
+    if (n < 0) {
+        count = 1; // for minus sign
+        n = -n;
+    }
+    while (n > 0) {
+        count++;
+        n /= 10;
+    }
+    return count;
+}
+
+static int count_digits_uint(unsigned long n) {
+    if (n == 0) return 1;
+    int count = 0;
+    while (n > 0) {
+        count++;
+        n /= 10;
+    }
+    return count;
+}
+
+static int count_digits_hex(unsigned long n) {
+    if (n == 0) return 1;
+    int count = 0;
+    while (n > 0) {
+        count++;
+        n /= 16;
+    }
+    return count;
+}
+
+// Simple printf implementation (supports %d, %u, %x, %ld, %lu, %lx, %s, %c, %%)
 int vprintf_impl(const char *format, va_list ap) {
     int count = 0;
 
     while (*format) {
         if (*format == '%') {
             format++;
+            
+            // Check for 'l' modifier
+            int is_long = 0;
+            if (*format == 'l') {
+                is_long = 1;
+                format++;
+            }
+            
             switch (*format) {
                 case 'd': {
-                    int n = va_arg(ap, int);
-                    putint_impl(n);
-                    count++;
+                    if (is_long) {
+                        long n = va_arg(ap, long);
+                        putint_impl(n);
+                        count += count_digits_int(n);
+                    } else {
+                        int n = va_arg(ap, int);
+                        putint_impl(n);
+                        count += count_digits_int(n);
+                    }
                     break;
                 }
                 case 'u': {
-                    unsigned int n = va_arg(ap, unsigned int);
-                    putuint_impl(n);
-                    count++;
+                    if (is_long) {
+                        unsigned long n = va_arg(ap, unsigned long);
+                        putuint_impl(n);
+                        count += count_digits_uint(n);
+                    } else {
+                        unsigned int n = va_arg(ap, unsigned int);
+                        putuint_impl(n);
+                        count += count_digits_uint(n);
+                    }
                     break;
                 }
                 case 'x': {
-                    unsigned int n = va_arg(ap, unsigned int);
-                    puthex_impl(n);
-                    count++;
+                    if (is_long) {
+                        unsigned long n = va_arg(ap, unsigned long);
+                        puthex_impl(n);
+                        count += count_digits_hex(n);
+                    } else {
+                        unsigned int n = va_arg(ap, unsigned int);
+                        puthex_impl(n);
+                        count += count_digits_hex(n);
+                    }
                     break;
                 }
                 case 's': {
                     char *s = va_arg(ap, char *);
                     if (s) {
                         puts_impl(s);
+                        count += strlen(s);
                     }
-                    count++;
                     break;
                 }
                 case 'c': {
@@ -323,9 +384,16 @@ int vprintf_impl(const char *format, va_list ap) {
                     break;
                 }
                 default:
-                    putchar_impl('%');
-                    putchar_impl(*format);
-                    count += 2;
+                    if (is_long) {
+                        putchar_impl('%');
+                        putchar_impl('l');
+                        putchar_impl(*format);
+                        count += 3;
+                    } else {
+                        putchar_impl('%');
+                        putchar_impl(*format);
+                        count += 2;
+                    }
                     break;
             }
         } else {
@@ -338,38 +406,64 @@ int vprintf_impl(const char *format, va_list ap) {
     return count;
 }
 
-// String formatting implementation (supports %d, %u, %x, %s, %c, %%)
+// String formatting implementation (supports %d, %u, %x, %ld, %lu, %lx, %s, %c, %%)
 static int vsprintf_impl(struct sprintf_ctx *ctx, const char *format, va_list ap) {
     int count = 0;
 
     while (*format) {
         if (*format == '%') {
             format++;
+            
+            // Check for 'l' modifier
+            int is_long = 0;
+            if (*format == 'l') {
+                is_long = 1;
+                format++;
+            }
+            
             switch (*format) {
                 case 'd': {
-                    int n = va_arg(ap, int);
-                    putint_str(ctx, n);
-                    count++;
+                    if (is_long) {
+                        long n = va_arg(ap, long);
+                        putint_str(ctx, n);
+                        count += count_digits_int(n);
+                    } else {
+                        int n = va_arg(ap, int);
+                        putint_str(ctx, n);
+                        count += count_digits_int(n);
+                    }
                     break;
                 }
                 case 'u': {
-                    unsigned int n = va_arg(ap, unsigned int);
-                    putuint_str(ctx, n);
-                    count++;
+                    if (is_long) {
+                        unsigned long n = va_arg(ap, unsigned long);
+                        putuint_str(ctx, n);
+                        count += count_digits_uint(n);
+                    } else {
+                        unsigned int n = va_arg(ap, unsigned int);
+                        putuint_str(ctx, n);
+                        count += count_digits_uint(n);
+                    }
                     break;
                 }
                 case 'x': {
-                    unsigned int n = va_arg(ap, unsigned int);
-                    puthex_str(ctx, n);
-                    count++;
+                    if (is_long) {
+                        unsigned long n = va_arg(ap, unsigned long);
+                        puthex_str(ctx, n);
+                        count += count_digits_hex(n);
+                    } else {
+                        unsigned int n = va_arg(ap, unsigned int);
+                        puthex_str(ctx, n);
+                        count += count_digits_hex(n);
+                    }
                     break;
                 }
                 case 's': {
                     char *s = va_arg(ap, char *);
                     if (s) {
                         puts_str(ctx, s);
+                        count += strlen(s);
                     }
-                    count++;
                     break;
                 }
                 case 'c': {
@@ -384,9 +478,16 @@ static int vsprintf_impl(struct sprintf_ctx *ctx, const char *format, va_list ap
                     break;
                 }
                 default:
-                    putchar_str(ctx, '%');
-                    putchar_str(ctx, *format);
-                    count += 2;
+                    if (is_long) {
+                        putchar_str(ctx, '%');
+                        putchar_str(ctx, 'l');
+                        putchar_str(ctx, *format);
+                        count += 3;
+                    } else {
+                        putchar_str(ctx, '%');
+                        putchar_str(ctx, *format);
+                        count += 2;
+                    }
                     break;
             }
         } else {
