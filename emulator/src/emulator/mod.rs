@@ -377,10 +377,6 @@ impl Emulator {
         self.event
     }
 
-    pub fn get_hit_rate(&self) -> f64 {
-        self.decoder.get_hit_rate()
-    }
-
     #[cfg(feature = "difftest")]
     pub fn get_ref_mut(&mut self) -> &mut CpuCore {
         &mut self.ref_emu

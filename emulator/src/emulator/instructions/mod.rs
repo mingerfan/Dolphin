@@ -2,11 +2,10 @@ mod insts;
 mod rv64a;
 mod rv64i;
 mod rv64m;
-mod clock_cache;
+// clock_cache removed: instruction cache not needed
 
 use anyhow::{Ok, Result};
-use clock_cache::ClockCache;
-use nohash_hasher::{self, BuildNoHashHasher};
+use nohash_hasher::BuildNoHashHasher;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -23,7 +22,6 @@ pub struct Instruction {
 }
 
 pub struct InstDecoder {
-    cache: ClockCache<u32, &'static Instruction, BuildNoHashHasher<u32>>,
     instructions_set: Vec<&'static Instruction>,
     compressed_instructions: Vec<Instruction>,
     #[allow(unused)]
@@ -47,10 +45,6 @@ pub fn is_inst_addr_misaligned(pc: u64) -> bool {
 
 impl InstDecoder {
     pub fn new(config: Rc<EmuConfig>) -> Self {
-        let cache = ClockCache::with_hasher(
-            config.others.decoder_cache_size,
-            BuildNoHashHasher::default(),
-        );
         let mut instructions_set: Vec<&'static Instruction> = vec![];
         let compressed_instructions = vec![];
         let mut opcode_map = HashMap::with_hasher(BuildNoHashHasher::default());
@@ -73,7 +67,6 @@ impl InstDecoder {
             entry.push(inst);
         }
         InstDecoder {
-            cache,
             instructions_set,
             compressed_instructions,
             config,
@@ -81,11 +74,6 @@ impl InstDecoder {
             hit_counter: 0,
             miss_counter: 0,
         }
-    }
-
-    #[inline(always)]
-    pub fn cache_has_capacity(&self) -> bool {
-        self.cache.capacity() != 0
     }
 
     #[inline]
@@ -110,7 +98,7 @@ impl InstDecoder {
             match maybe_instruction {
                 // 1. 在 opcode_map 中成功找到，这是最理想的情况
                 Some(instruction) => {
-                    self.cache.insert(inst, instruction);
+                    // cache removed: directly return the instruction
                     Ok(instruction)
                 }
 
@@ -138,27 +126,10 @@ impl InstDecoder {
 
     #[inline(always)]
     pub fn fast_path(&mut self, inst: u32) -> Result<&Instruction> {
-        if is_compressed(inst) || !self.cache_has_capacity() {
-            self.miss_counter += 1;
-            return self.slow_path(inst);
-        }
-        let res = self.cache.get(&inst).copied();
-        if let Some(res) = res {
-            self.hit_counter += 1;
-            Ok(res)
-        } else {
-            self.miss_counter += 1;
-            self.slow_path(inst)
-        }
+        // instruction cache removed: always use slow_path
+        self.slow_path(inst)
     }
 
-    pub fn get_hit_rate(&self) -> f64 {
-        if self.hit_counter + self.miss_counter == 0 {
-            0.0
-        } else {
-            self.hit_counter as f64 / (self.hit_counter + self.miss_counter) as f64
-        }
-    }
 }
 
 struct FormatR {
