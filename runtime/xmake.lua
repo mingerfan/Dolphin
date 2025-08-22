@@ -25,6 +25,13 @@ target("dolphin_runtime")
     add_includedirs(".")
     set_targetdir("build/runtime")
 
+    -- 从环境变量获取 MAINARGS 配置
+    local mainargs_value = os.getenv("MAINARGS_VALUE")
+    if mainargs_value and mainargs_value ~= "" then
+        add_defines("MAINARGS=\"" .. mainargs_value .. "\"")
+        print("Runtime using MAINARGS: " .. mainargs_value)
+    end
+
     -- generate device_config.h from devices/profile/device.toml before build
     before_build(function (target)
         local projdir = os.projectdir()

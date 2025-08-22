@@ -39,16 +39,39 @@ target("microbench")
     add_deps("dolphin_runtime")
     set_targetdir("bin")
 
+    -- 从环境变量获取 MAINARGS 配置
+    local mainargs_value = os.getenv("MAINARGS_VALUE")
+    if mainargs_value and mainargs_value ~= "" then
+        add_defines("MAINARGS=\"" .. mainargs_value .. "\"")
+        print("Using MAINARGS: " .. mainargs_value)
+    end
+
 task("test")
     local emu_dir = "../../emulator"
     local cur_dir = os.curdir()
     on_run(function ()
         import("core.base.option")
         import("core.project.target")
-        local gdb, tracer, difftest
+        local gdb, tracer, difftest, mainargs
         gdb = option.get("gdb")
         tracer = option.get("tracer")
         difftest = option.get("difftest")
+        mainargs = option.get("mainargs")
+
+        -- 如果指定了 mainargs，需要重新编译
+        if mainargs then
+            print(string.format("Building with mainargs: %s", mainargs))
+            -- 清理之前的构建，确保重新编译
+            os.exec("xmake clean")
+            -- 设置环境变量并重新编译
+            os.setenv("MAINARGS_VALUE", mainargs)
+            os.exec("xmake build")
+        else
+            -- 清除环境变量
+            os.setenv("MAINARGS_VALUE", "")
+            -- 确保目标已构建
+            os.exec("xmake build")
+        end
 
         local binary = path.join(cur_dir, "bin", "microbench")
         if os.isfile(binary) then
@@ -77,11 +100,12 @@ task("test")
     end)
 
     set_menu {
-        usage = "xmake test [--gdb] [--tracer] [--target <target>]",
-        description = "Run binary in emulator",
+        usage = "xmake test [--gdb] [--tracer] [--difftest] [--mainargs <args>]",
+        description = "Run binary in emulator with optional main arguments",
         options = {
             {'g', "gdb", "k", nil, "Enable GDB support"},
             {'tr', "tracer", "k", nil, "Enable execution tracer"},
-            {'d', "difftest", "kv", true, "Enable diff test"},
+            {'d', "difftest", "kv", false, "Enable diff test"},
+            {'m', "mainargs", "kv", nil, "Arguments to pass to main function (test|train|ref|huge)"},
         }
     }
