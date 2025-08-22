@@ -86,6 +86,7 @@ pub fn build_emu_run_blocking(args: Args) -> Result<()> {
             // 执行模拟器步骤
             emu.steps(usize::MAX)?;
         }
+        tracing::info!("指令缓存命中率：{}", emu.get_hit_rate());
     }
 
     #[cfg(feature = "tracer")]

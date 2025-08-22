@@ -331,7 +331,7 @@ mod tests {
                 instruction_tracer_list_size: 64,
             },
             others: OthersConfig {
-                decoder_lru_cache_size: 1024,
+                decoder_cache_size: 1024,
             },
         });
 

@@ -2,18 +2,19 @@ mod insts;
 mod rv64a;
 mod rv64i;
 mod rv64m;
+mod clock_cache;
 
 use anyhow::{Ok, Result};
-use std::rc::Rc;
-use hashlink::LruCache;
+use clock_cache::ClockCache;
 use nohash_hasher::{self, BuildNoHashHasher};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::const_values::EmuConfig;
 use crate::emulator::Emulator;
 use crate::utils::bit_utils::{BitSlice, sign_extend_64};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub struct Instruction {
     pub mask: u32,
     pub identifier: u32,
@@ -22,12 +23,14 @@ pub struct Instruction {
 }
 
 pub struct InstDecoder {
-    cache: LruCache<u32, Instruction, BuildNoHashHasher<u32>>,
-    instructions_set: Vec<Instruction>,
+    cache: ClockCache<u32, &'static Instruction>,
+    instructions_set: Vec<&'static Instruction>,
     compressed_instructions: Vec<Instruction>,
     #[allow(unused)]
     config: Rc<EmuConfig>,
-    opcode_map: HashMap<u32, Vec<Instruction>, BuildNoHashHasher<u32>>,
+    opcode_map: HashMap<u32, Vec<&'static Instruction>, BuildNoHashHasher<u32>>,
+    hit_counter: u64,
+    miss_counter: u64,
 }
 
 const MASK_OPCODE: u32 = 0x7F;
@@ -44,21 +47,20 @@ pub fn is_inst_addr_misaligned(pc: u64) -> bool {
 
 impl InstDecoder {
     pub fn new(config: Rc<EmuConfig>) -> Self {
-        let cache = LruCache::with_hasher(
-            config.others.decoder_lru_cache_size,
+        let cache = ClockCache::with_hasher(
+            config.others.decoder_cache_size,
             BuildNoHashHasher::default(),
         );
-        let mut instructions_set = vec![];
+        let mut instructions_set: Vec<&'static Instruction> = vec![];
         let compressed_instructions = vec![];
         let mut opcode_map = HashMap::with_hasher(BuildNoHashHasher::default());
 
-        instructions_set.extend_from_slice(rv64i::RV_I);
-
+        instructions_set.extend(rv64i::RV_I);
         if config.inst_set.m_ext {
-            instructions_set.extend_from_slice(rv64m::RV_M);
+            instructions_set.extend(rv64m::RV_M);
         }
         if config.inst_set.a_ext {
-            instructions_set.extend_from_slice(rv64a::RV_A);
+            instructions_set.extend(rv64a::RV_A);
         }
 
         if config.inst_set.c_ext {
@@ -67,8 +69,8 @@ impl InstDecoder {
 
         for inst in &instructions_set {
             let opcode = inst.identifier & MASK_OPCODE;
-            let entry: &mut Vec<Instruction> = opcode_map.entry(opcode).or_default();
-            entry.push(*inst);
+            let entry: &mut Vec<&'static Instruction> = opcode_map.entry(opcode).or_default();
+            entry.push(inst);
         }
         InstDecoder {
             cache,
@@ -76,6 +78,8 @@ impl InstDecoder {
             compressed_instructions,
             config,
             opcode_map,
+            hit_counter: 0,
+            miss_counter: 0,
         }
     }
 
@@ -105,7 +109,10 @@ impl InstDecoder {
             // 根据查找结果进行处理
             match maybe_instruction {
                 // 1. 在 opcode_map 中成功找到，这是最理想的情况
-                Some(instruction) => Ok(instruction),
+                Some(instruction) => {
+                    self.cache.insert(inst, instruction);
+                    Ok(instruction)
+                }
 
                 // 2. 在 opcode_map 中未找到，需要进一步检查以确定是真错误还是状态不一致
                 None => {
@@ -131,13 +138,26 @@ impl InstDecoder {
 
     #[inline(always)]
     pub fn fast_path(&mut self, inst: u32) -> Result<&Instruction> {
-        if is_compressed(inst) || !self.cache_has_capacity() || !self.cache.contains_key(&inst) {
-            let temp = self.slow_path(inst);
-            return temp;
+        if is_compressed(inst) || !self.cache_has_capacity() {
+            self.miss_counter += 1;
+            return self.slow_path(inst);
         }
-        self.cache
-            .get(&inst)
-            .ok_or(anyhow::anyhow!("Instruction not found in cache"))
+        let res = self.cache.get(&inst).copied();
+        if let Some(res) = res {
+            self.hit_counter += 1;
+            Ok(res)
+        } else {
+            self.miss_counter += 1;
+            self.slow_path(inst)
+        }
+    }
+
+    pub fn get_hit_rate(&self) -> f64 {
+        if self.hit_counter + self.miss_counter == 0 {
+            0.0
+        } else {
+            self.hit_counter as f64 / (self.hit_counter + self.miss_counter) as f64
+        }
     }
 }
 

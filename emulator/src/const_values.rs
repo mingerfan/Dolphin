@@ -27,7 +27,7 @@ pub struct DebugConfig {
 
 #[derive(Deserialize, Debug)]
 pub struct OthersConfig {
-    pub decoder_lru_cache_size: usize,
+    pub decoder_cache_size: usize,
 }
 
 #[derive(Deserialize, Debug, Clone)]
