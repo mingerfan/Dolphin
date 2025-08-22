@@ -1,14 +1,16 @@
+use std::hash::{BuildHasher, RandomState};
+
 use clockpro_cache::ClockProCache;
-use nohash_hasher::BuildNoHashHasher;
+use nohash_hasher::IsEnabled;
 
 /// Clock-Pro缓存的包装器，提供与LRU缓存兼容的接口
-pub struct ClockCache<K, V> {
-    cache: ClockProCache<K, V>,
+pub struct ClockCache<K, V, S = RandomState> {
+    cache: ClockProCache<K, V, S>,
     capacity: usize,
 }
 
 #[allow(unused)]
-impl<K, V> ClockCache<K, V>
+impl <K, V> ClockCache<K, V, RandomState>
 where
     K: Clone + Eq + std::hash::Hash,
     V: Clone,
@@ -25,14 +27,33 @@ where
         }
     }
 
+    /// 清空缓存
+    pub fn clear(&mut self) {
+        // ClockProCache 没有直接的clear方法，我们重新创建一个
+        self.cache = ClockProCache::new(self.capacity).expect("Failed to create ClockProCache");
+    }
+}
+
+#[allow(unused)]
+impl<K, V, S> ClockCache<K, V, S>
+where
+    K: Clone + Eq + std::hash::Hash + IsEnabled,
+    V: Clone,
+    S: BuildHasher
+{
+
     /// 创建一个带有自定义哈希器的Clock缓存实例
     ///
     /// # Arguments
     /// * `capacity` - 缓存的最大容量（最小为3）
-    /// * `_hasher` - 哈希器构建器（为了兼容性保留，但ClockProCache内部使用自己的哈希）
-    pub fn with_hasher(capacity: usize, _hasher: BuildNoHashHasher<K>) -> Self {
+    /// * `_hasher` - 哈希器构建器
+    pub fn with_hasher(capacity: usize, _hasher: S) -> Self {
+        let actual_capacity = capacity.max(3);
         // ClockProCache 使用内部的哈希实现，所以我们忽略传入的hasher
-        Self::new(capacity)
+        Self {
+            cache: ClockProCache::with_hasher(actual_capacity, _hasher).expect("Failed to create ClockProCache"),
+            capacity: actual_capacity,
+        }
     }
 
     /// 获取缓存容量
@@ -66,12 +87,6 @@ where
     /// * `key` - 要检查的键
     pub fn contains(&mut self, key: &K) -> bool {
         self.cache.get(key).is_some()
-    }
-
-    /// 清空缓存
-    pub fn clear(&mut self) {
-        // ClockProCache 没有直接的clear方法，我们重新创建一个
-        self.cache = ClockProCache::new(self.capacity).expect("Failed to create ClockProCache");
     }
 
     /// 获取缓存中当前的元素数量
@@ -115,7 +130,7 @@ mod tests {
 
     #[test]
     fn test_clock_cache_with_hasher() {
-        let mut cache = ClockCache::with_hasher(3, BuildNoHashHasher::default());
+        let mut cache: ClockCache<u32, &str, BuildNoHashHasher<u32>> = ClockCache::with_hasher(3, BuildNoHashHasher::default());
 
         cache.insert(1u32, "one");
         cache.insert(2u32, "two");

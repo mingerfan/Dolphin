@@ -23,7 +23,7 @@ pub struct Instruction {
 }
 
 pub struct InstDecoder {
-    cache: ClockCache<u32, &'static Instruction>,
+    cache: ClockCache<u32, &'static Instruction, BuildNoHashHasher<u32>>,
     instructions_set: Vec<&'static Instruction>,
     compressed_instructions: Vec<Instruction>,
     #[allow(unused)]

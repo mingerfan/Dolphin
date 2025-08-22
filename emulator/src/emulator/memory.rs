@@ -137,6 +137,13 @@ impl Memory {
         addr >= self.memory_base && addr < self.memory_base + self.memory_size as u64
     }
 
+    /// 检查给定地址范围是否完全在主内存区域内
+    #[inline(always)]
+    pub fn is_mem_region_range(&self, addr: u64, size: usize) -> bool {
+        addr >= self.memory_base && 
+        addr.saturating_add(size as u64) <= self.memory_base + self.memory_size as u64
+    }
+
     /// 移除 MMIO 映射
     pub fn unmap_mmio(&mut self, base: u64) -> bool {
         if let Some(index) = self.mmio_regions.iter().position(|r| r.base == base) {
@@ -195,6 +202,19 @@ impl Memory {
         }
 
         Err(MemoryError::OutOfBounds { addr, size })
+    }
+
+    /// 快速读取u32指令（unsafe版本，仅用于取指）
+    /// 假设地址有效且在主内存范围内，跳过边界检查和MMIO检查以提高性能
+    #[inline(always)]
+    pub unsafe fn read_u32_fast(&self, addr: u64) -> u32 {
+        let real_addr = addr.wrapping_sub(self.memory_base) as usize;
+        // 直接从内存读取4字节并转换为u32
+        // 假设地址已经过检查且对齐
+        unsafe {
+            let ptr = self.data.as_ptr().add(real_addr) as *const u32;
+            ptr.read_unaligned().to_le()
+        }
     }
 
     /// 写入内存
@@ -418,5 +438,50 @@ mod tests {
         memory.write_word(addr + 4, 0x12345678).unwrap();
         let word = memory.read_word(addr + 4).unwrap();
         assert_eq!(word, 0x12345678);
+    }
+
+    #[test]
+    fn test_fast_u32_read() {
+        let (config, device_file) = create_test_config();
+        let mut memory = Memory::new(config, &device_file).unwrap();
+
+        // 测试快速u32读取
+        let addr = 0x8000_1000;
+        let test_value = 0x12345678u32;
+        
+        // 写入测试值
+        memory.write_word(addr, test_value).unwrap();
+        
+        // 使用普通方法读取
+        let normal_read = memory.read_word(addr).unwrap();
+        
+        // 使用快速方法读取
+        let fast_read = unsafe { memory.read_u32_fast(addr) };
+        
+        // 验证两种方法读取的结果相同
+        assert_eq!(normal_read, fast_read);
+        assert_eq!(fast_read, test_value);
+    }
+
+    #[test]
+    fn test_mem_region_range_check() {
+        let (config, device_file) = create_test_config();
+        let memory = Memory::new(config, &device_file).unwrap();
+
+        // 测试有效地址范围
+        assert!(memory.is_mem_region_range(0x8000_0000, 4));
+        assert!(memory.is_mem_region_range(0x8000_1000, 4));
+        
+        // 测试边界情况
+        let last_valid_addr = 0x8000_0000 + (128 * 1024 * 1024) - 4;
+        assert!(memory.is_mem_region_range(last_valid_addr, 4));
+        
+        // 测试越界情况
+        let overflow_addr = 0x8000_0000 + (128 * 1024 * 1024) - 3;
+        assert!(!memory.is_mem_region_range(overflow_addr, 4));
+        
+        // 测试完全超出范围的地址
+        assert!(!memory.is_mem_region_range(0x9000_0000, 4));
+        assert!(!memory.is_mem_region_range(0x7000_0000, 4));
     }
 }

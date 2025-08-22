@@ -99,8 +99,16 @@ impl State {
     /// 取指令
     #[inline(always)]
     pub fn fetch_instruction(&self, pc: u64) -> Result<u32> {
-        let bytes = self
-            .read_memory(pc, 4)?;
+        // 快速路径：如果PC在主内存区域，使用unsafe快速读取
+        if self.memory.is_mem_region_range(pc, 4) {
+            // 安全检查：确保4字节读取不会越界
+            unsafe {
+                return Ok(self.memory.read_u32_fast(pc));
+            }
+        }
+        
+        // 慢速路径：可能涉及MMIO或边界情况
+        let bytes = self.read_memory(pc, 4)?;
         Ok(bytes
             .try_into()
             .map(u32::from_le_bytes)

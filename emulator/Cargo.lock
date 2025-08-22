@@ -198,8 +198,7 @@ checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 [[package]]
 name = "clockpro-cache"
 version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2009f347448d6c03472ac84e51a390c77ac8c1926c5a606ea18095b34d9c4e04"
+source = "git+https://github.com/mingerfan/rust-clockpro-cache.git#40234d8fccaac4ce8957b684ef3116a54cc9e971"
 dependencies = [
  "bitflags",
  "slabigator",
