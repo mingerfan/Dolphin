@@ -186,10 +186,51 @@ impl Memory {
     #[inline(always)]
     pub fn read(&self, addr: u64, size: usize) -> Result<Vec<u8>, MemoryError> {
         if self.is_mem_region(addr) {
-            // 普通内存访问
-            let real_addr = self.translate_address(addr, size, 1)?;
-            let start = real_addr as usize;
-            return Ok(self.data[start..start + size].to_vec())
+            // 普通内存访问 - 根据长度选择优化路径
+            match size {
+                1 => {
+                    // 字节访问
+                    if !self.is_mem_region_range(addr, 1) {
+                        return Err(MemoryError::OutOfBounds { addr, size: 1 });
+                    }
+                    let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+                    let value = unsafe { self.read_byte_unsafe(real_addr) };
+                    return Ok(vec![value]);
+                }
+                2 => {
+                    // 半字访问
+                    if !self.is_mem_region_range(addr, 2) {
+                        return Err(MemoryError::OutOfBounds { addr, size: 2 });
+                    }
+                    let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+                    let value = unsafe { self.read_halfword_unsafe(real_addr) };
+                    return Ok(value.to_le_bytes().to_vec());
+                }
+                4 => {
+                    // 字访问
+                    if !self.is_mem_region_range(addr, 4) {
+                        return Err(MemoryError::OutOfBounds { addr, size: 4 });
+                    }
+                    let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+                    let value = unsafe { self.read_word_unsafe(real_addr) };
+                    return Ok(value.to_le_bytes().to_vec());
+                }
+                8 => {
+                    // 双字访问
+                    if !self.is_mem_region_range(addr, 8) {
+                        return Err(MemoryError::OutOfBounds { addr, size: 8 });
+                    }
+                    let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+                    let value = unsafe { self.read_doubleword_unsafe(real_addr) };
+                    return Ok(value.to_le_bytes().to_vec());
+                }
+                _ => {
+                    // 非标准长度，使用传统方法
+                    let real_addr = self.translate_address(addr, size, 1)?;
+                    let start = real_addr as usize;
+                    return Ok(self.data[start..start + size].to_vec());
+                }
+            }
         }
 
         // 检查是否为 MMIO 访问
@@ -217,14 +258,123 @@ impl Memory {
         }
     }
 
+    /// 快速读取字节（unsafe版本）
+    #[inline(always)]
+    unsafe fn read_byte_unsafe(&self, real_addr: usize) -> u8 {
+        unsafe { *self.data.get_unchecked(real_addr) }
+    }
+
+    /// 快速读取半字（unsafe版本）
+    #[inline(always)]
+    unsafe fn read_halfword_unsafe(&self, real_addr: usize) -> u16 {
+        unsafe {
+            let ptr = self.data.as_ptr().add(real_addr) as *const u16;
+            ptr.read_unaligned().to_le()
+        }
+    }
+
+    /// 快速读取字（unsafe版本）
+    #[inline(always)]
+    unsafe fn read_word_unsafe(&self, real_addr: usize) -> u32 {
+        unsafe {
+            let ptr = self.data.as_ptr().add(real_addr) as *const u32;
+            ptr.read_unaligned().to_le()
+        }
+    }
+
+    /// 快速读取双字（unsafe版本）
+    #[inline(always)]
+    unsafe fn read_doubleword_unsafe(&self, real_addr: usize) -> u64 {
+        unsafe {
+            let ptr = self.data.as_ptr().add(real_addr) as *const u64;
+            ptr.read_unaligned().to_le()
+        }
+    }
+
+    /// 快速写入字节（unsafe版本）
+    #[inline(always)]
+    unsafe fn write_byte_unsafe(&mut self, real_addr: usize, value: u8) {
+        unsafe { *self.data.get_unchecked_mut(real_addr) = value; }
+    }
+
+    /// 快速写入半字（unsafe版本）
+    #[inline(always)]
+    unsafe fn write_halfword_unsafe(&mut self, real_addr: usize, value: u16) {
+        unsafe {
+            let ptr = self.data.as_mut_ptr().add(real_addr) as *mut u16;
+            ptr.write_unaligned(value.to_le());
+        }
+    }
+
+    /// 快速写入字（unsafe版本）
+    #[inline(always)]
+    unsafe fn write_word_unsafe(&mut self, real_addr: usize, value: u32) {
+        unsafe {
+            let ptr = self.data.as_mut_ptr().add(real_addr) as *mut u32;
+            ptr.write_unaligned(value.to_le());
+        }
+    }
+
+    /// 快速写入双字（unsafe版本）
+    #[inline(always)]
+    unsafe fn write_doubleword_unsafe(&mut self, real_addr: usize, value: u64) {
+        unsafe {
+            let ptr = self.data.as_mut_ptr().add(real_addr) as *mut u64;
+            ptr.write_unaligned(value.to_le());
+        }
+    }
+
     /// 写入内存
     #[inline(always)]
     pub fn write(&mut self, addr: u64, data: &[u8]) -> Result<(), MemoryError> {
         if self.is_mem_region(addr) {
-            // 普通内存访问
-            let real_addr = self.translate_address(addr, data.len(), 1)?;
-            let start = real_addr as usize;
-            self.data[start..start + data.len()].copy_from_slice(data);
+            // 普通内存访问 - 根据长度选择优化路径
+            match data.len() {
+                1 => {
+                    // 字节访问
+                    if !self.is_mem_region_range(addr, 1) {
+                        return Err(MemoryError::OutOfBounds { addr, size: 1 });
+                    }
+                    let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+                    unsafe { self.write_byte_unsafe(real_addr, data[0]); }
+                }
+                2 => {
+                    // 半字访问
+                    if !self.is_mem_region_range(addr, 2) {
+                        return Err(MemoryError::OutOfBounds { addr, size: 2 });
+                    }
+                    let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+                    let value = u16::from_le_bytes([data[0], data[1]]);
+                    unsafe { self.write_halfword_unsafe(real_addr, value); }
+                }
+                4 => {
+                    // 字访问
+                    if !self.is_mem_region_range(addr, 4) {
+                        return Err(MemoryError::OutOfBounds { addr, size: 4 });
+                    }
+                    let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+                    let value = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+                    unsafe { self.write_word_unsafe(real_addr, value); }
+                }
+                8 => {
+                    // 双字访问
+                    if !self.is_mem_region_range(addr, 8) {
+                        return Err(MemoryError::OutOfBounds { addr, size: 8 });
+                    }
+                    let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+                    let value = u64::from_le_bytes([
+                        data[0], data[1], data[2], data[3],
+                        data[4], data[5], data[6], data[7],
+                    ]);
+                    unsafe { self.write_doubleword_unsafe(real_addr, value); }
+                }
+                _ => {
+                    // 非标准长度，使用传统方法
+                    let real_addr = self.translate_address(addr, data.len(), 1)?;
+                    let start = real_addr as usize;
+                    self.data[start..start + data.len()].copy_from_slice(data);
+                }
+            }
             return Ok(())
         }
 
@@ -250,56 +400,200 @@ impl Memory {
     /// 读取字节
     #[inline(always)]
     pub fn read_byte(&self, addr: u64) -> Result<u8, MemoryError> {
-        let data = self.read(addr, 1)?;
-        Ok(data[0])
+        if self.is_mem_region(addr) {
+            // 主内存访问 - 直接使用unsafe版本
+            if !self.is_mem_region_range(addr, 1) {
+                return Err(MemoryError::OutOfBounds { addr, size: 1 });
+            }
+            let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+            return Ok(unsafe { self.read_byte_unsafe(real_addr) });
+        }
+
+        // MMIO访问 - 通过通用read方法
+        if let Some(region) = self.find_mmio_region(addr) {
+            let offset = addr - region.base;
+            let mut device = region.device.lock().unwrap();
+            let res = device.read(offset, 1)?;
+            *self.is_last_mmio.borrow_mut() = true;
+            return Ok(res[0]);
+        }
+
+        Err(MemoryError::OutOfBounds { addr, size: 1 })
     }
 
     /// 读取半字
     #[inline(always)]
     pub fn read_halfword(&self, addr: u64) -> Result<u16, MemoryError> {
-        let data = self.read(addr, 2)?;
-        Ok(u16::from_le_bytes([data[0], data[1]]))
+        if self.is_mem_region(addr) {
+            // 主内存访问 - 直接使用unsafe版本
+            if !self.is_mem_region_range(addr, 2) {
+                return Err(MemoryError::OutOfBounds { addr, size: 2 });
+            }
+            let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+            return Ok(unsafe { self.read_halfword_unsafe(real_addr) });
+        }
+
+        // MMIO访问 - 通过通用read方法
+        if let Some(region) = self.find_mmio_region(addr) {
+            let offset = addr - region.base;
+            let mut device = region.device.lock().unwrap();
+            let res = device.read(offset, 2)?;
+            *self.is_last_mmio.borrow_mut() = true;
+            return Ok(u16::from_le_bytes([res[0], res[1]]));
+        }
+
+        Err(MemoryError::OutOfBounds { addr, size: 2 })
     }
 
     /// 读取字
     #[inline(always)]
     pub fn read_word(&self, addr: u64) -> Result<u32, MemoryError> {
-        let data = self.read(addr, 4)?;
-        Ok(u32::from_le_bytes([data[0], data[1], data[2], data[3]]))
+        if self.is_mem_region(addr) {
+            // 主内存访问 - 直接使用unsafe版本
+            if !self.is_mem_region_range(addr, 4) {
+                return Err(MemoryError::OutOfBounds { addr, size: 4 });
+            }
+            let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+            return Ok(unsafe { self.read_word_unsafe(real_addr) });
+        }
+
+        // MMIO访问 - 通过通用read方法
+        if let Some(region) = self.find_mmio_region(addr) {
+            let offset = addr - region.base;
+            let mut device = region.device.lock().unwrap();
+            let res = device.read(offset, 4)?;
+            *self.is_last_mmio.borrow_mut() = true;
+            return Ok(u32::from_le_bytes([res[0], res[1], res[2], res[3]]));
+        }
+
+        Err(MemoryError::OutOfBounds { addr, size: 4 })
     }
 
     /// 读取双字
     #[inline(always)]
     pub fn read_doubleword(&self, addr: u64) -> Result<u64, MemoryError> {
-        let data = self.read(addr, 8)?;
-        Ok(u64::from_le_bytes([
-            data[0], data[1], data[2], data[3],
-            data[4], data[5], data[6], data[7],
-        ]))
+        if self.is_mem_region(addr) {
+            // 主内存访问 - 直接使用unsafe版本
+            if !self.is_mem_region_range(addr, 8) {
+                return Err(MemoryError::OutOfBounds { addr, size: 8 });
+            }
+            let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+            return Ok(unsafe { self.read_doubleword_unsafe(real_addr) });
+        }
+
+        // MMIO访问 - 通过通用read方法
+        if let Some(region) = self.find_mmio_region(addr) {
+            let offset = addr - region.base;
+            let mut device = region.device.lock().unwrap();
+            let res = device.read(offset, 8)?;
+            *self.is_last_mmio.borrow_mut() = true;
+            return Ok(u64::from_le_bytes([
+                res[0], res[1], res[2], res[3],
+                res[4], res[5], res[6], res[7],
+            ]));
+        }
+
+        Err(MemoryError::OutOfBounds { addr, size: 8 })
     }
 
     /// 写入字节
     #[inline(always)]
     pub fn write_byte(&mut self, addr: u64, value: u8) -> Result<(), MemoryError> {
-        self.write(addr, &[value])
+        if self.is_mem_region(addr) {
+            // 主内存访问 - 直接使用unsafe版本
+            if !self.is_mem_region_range(addr, 1) {
+                return Err(MemoryError::OutOfBounds { addr, size: 1 });
+            }
+            let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+            unsafe { self.write_byte_unsafe(real_addr, value); }
+            return Ok(());
+        }
+
+        // MMIO访问 - 通过通用write方法
+        if let Some(region) = self.find_mmio_region(addr) {
+            let offset = addr - region.base;
+            let mut device = region.device.lock().unwrap();
+            device.write(offset, &[value])?;
+            *self.is_last_mmio.borrow_mut() = true;
+            return Ok(());
+        }
+
+        Err(MemoryError::OutOfBounds { addr, size: 1 })
     }
 
     /// 写入半字
     #[inline(always)]
     pub fn write_halfword(&mut self, addr: u64, value: u16) -> Result<(), MemoryError> {
-        self.write(addr, &value.to_le_bytes())
+        if self.is_mem_region(addr) {
+            // 主内存访问 - 直接使用unsafe版本
+            if !self.is_mem_region_range(addr, 2) {
+                return Err(MemoryError::OutOfBounds { addr, size: 2 });
+            }
+            let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+            unsafe { self.write_halfword_unsafe(real_addr, value); }
+            return Ok(());
+        }
+
+        // MMIO访问 - 通过通用write方法
+        if let Some(region) = self.find_mmio_region(addr) {
+            let offset = addr - region.base;
+            let mut device = region.device.lock().unwrap();
+            device.write(offset, &value.to_le_bytes())?;
+            *self.is_last_mmio.borrow_mut() = true;
+            return Ok(());
+        }
+
+        Err(MemoryError::OutOfBounds { addr, size: 2 })
     }
 
     /// 写入字
     #[inline(always)]
     pub fn write_word(&mut self, addr: u64, value: u32) -> Result<(), MemoryError> {
-        self.write(addr, &value.to_le_bytes())
+        if self.is_mem_region(addr) {
+            // 主内存访问 - 直接使用unsafe版本
+            if !self.is_mem_region_range(addr, 4) {
+                return Err(MemoryError::OutOfBounds { addr, size: 4 });
+            }
+            let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+            unsafe { self.write_word_unsafe(real_addr, value); }
+            return Ok(());
+        }
+
+        // MMIO访问 - 通过通用write方法
+        if let Some(region) = self.find_mmio_region(addr) {
+            let offset = addr - region.base;
+            let mut device = region.device.lock().unwrap();
+            device.write(offset, &value.to_le_bytes())?;
+            *self.is_last_mmio.borrow_mut() = true;
+            return Ok(());
+        }
+
+        Err(MemoryError::OutOfBounds { addr, size: 4 })
     }
 
     /// 写入双字
     #[inline(always)]
     pub fn write_doubleword(&mut self, addr: u64, value: u64) -> Result<(), MemoryError> {
-        self.write(addr, &value.to_le_bytes())
+        if self.is_mem_region(addr) {
+            // 主内存访问 - 直接使用unsafe版本
+            if !self.is_mem_region_range(addr, 8) {
+                return Err(MemoryError::OutOfBounds { addr, size: 8 });
+            }
+            let real_addr = (addr.wrapping_sub(self.memory_base)) as usize;
+            unsafe { self.write_doubleword_unsafe(real_addr, value); }
+            return Ok(());
+        }
+
+        // MMIO访问 - 通过通用write方法
+        if let Some(region) = self.find_mmio_region(addr) {
+            let offset = addr - region.base;
+            let mut device = region.device.lock().unwrap();
+            device.write(offset, &value.to_le_bytes())?;
+            *self.is_last_mmio.borrow_mut() = true;
+            return Ok(());
+        }
+
+        Err(MemoryError::OutOfBounds { addr, size: 8 })
     }
 }
 

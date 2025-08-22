@@ -27,8 +27,6 @@ pub struct InstDecoder {
     #[allow(unused)]
     config: Rc<EmuConfig>,
     opcode_map: HashMap<u32, Vec<&'static Instruction>, BuildNoHashHasher<u32>>,
-    hit_counter: u64,
-    miss_counter: u64,
 }
 
 const MASK_OPCODE: u32 = 0x7F;
@@ -71,8 +69,6 @@ impl InstDecoder {
             compressed_instructions,
             config,
             opcode_map,
-            hit_counter: 0,
-            miss_counter: 0,
         }
     }
 
